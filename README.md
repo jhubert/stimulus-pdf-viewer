@@ -26,6 +26,40 @@ Or with yarn:
 yarn add stimulus-pdf-viewer @hotwired/stimulus @rails/request.js pdfjs-dist pdf-lib
 ```
 
+### Using Importmap (Rails 7+)
+
+**Option 1: Download vendored files (Recommended)**
+
+Download the packages to your vendor directory:
+
+```bash
+bin/importmap pin stimulus-pdf-viewer pdfjs-dist pdf-lib --download
+```
+
+Then download the PDF.js worker file separately:
+
+```bash
+curl -o vendor/javascript/pdfjs-dist--pdf.worker.js \
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.mjs"
+```
+
+Add the worker to your `config/importmap.rb`:
+
+```ruby
+pin "pdfjs-dist/build/pdf.worker.mjs", to: "pdfjs-dist--pdf.worker.js"
+```
+
+**Option 2: Use CDN URLs**
+
+Add the following to your `config/importmap.rb`:
+
+```ruby
+pin "stimulus-pdf-viewer", to: "https://ga.jspm.io/npm:stimulus-pdf-viewer@1.0.0/dist/stimulus-pdf-viewer.esm.js"
+pin "pdfjs-dist", to: "https://ga.jspm.io/npm:pdfjs-dist@4.9.155/build/pdf.mjs"
+pin "pdfjs-dist/build/pdf.worker.mjs", to: "https://ga.jspm.io/npm:pdfjs-dist@4.9.155/build/pdf.worker.mjs"
+pin "pdf-lib", to: "https://ga.jspm.io/npm:pdf-lib@1.17.1/dist/pdf-lib.esm.js"
+```
+
 ## Quick Start
 
 ### 1. Register the controllers
