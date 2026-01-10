@@ -1,0 +1,27 @@
+stimulus-pdf-viewer
+Copyright 2024 Jeremy Baker
+
+This product includes software developed at Mozilla Foundation
+(https://www.mozilla.org/).
+
+Portions of this software are derived from PDF.js, which is licensed
+under the Apache License, Version 2.0:
+
+  PDF.js
+  Copyright Mozilla Foundation
+  https://github.com/nickmessenlehner/nickmessenlehner.github.io/pdf.js
+  Licensed under the Apache License, Version 2.0
+
+The following files contain code derived from or inspired by PDF.js:
+
+  - src/lib/core/rendering_queue.js
+    Based on PDF.js pdf_rendering_queue.js rendering prioritization pattern
+
+  - src/lib/core/viewer.js
+    Text layer selection handling based on PDF.js text_layer_builder.js patterns
+
+  - src/lib/find_controller.js
+    Search functionality patterns inspired by PDF.js pdf_find_controller.js
+
+For the Apache License, Version 2.0, see LICENSE-APACHE.
+For the MIT License covering original code, see LICENSE-MIT.

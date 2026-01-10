@@ -1,0 +1,57 @@
+{
+  "name": "stimulus-pdf-viewer",
+  "version": "0.1.0",
+  "description": "PDF viewer with annotation support for Stimulus and Hotwire",
+  "author": "Jeremy Baker",
+  "license": "(MIT AND Apache-2.0)",
+  "type": "module",
+  "main": "dist/stimulus-pdf-viewer.js",
+  "module": "dist/stimulus-pdf-viewer.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/stimulus-pdf-viewer.esm.js",
+      "require": "./dist/stimulus-pdf-viewer.js"
+    },
+    "./controllers": {
+      "import": "./src/controllers/index.js"
+    },
+    "./lib": {
+      "import": "./src/lib/index.js"
+    },
+    "./styles": "./styles/pdf-viewer.scss",
+    "./styles/*": "./styles/*"
+  },
+  "files": [
+    "dist",
+    "src",
+    "styles",
+    "assets"
+  ],
+  "peerDependencies": {
+    "@hotwired/stimulus": "^3.0.0",
+    "@rails/request.js": "^0.0.9",
+    "pdfjs-dist": "^4.0.0",
+    "pdf-lib": "^1.17.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "rollup": "^4.0.0"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jhubert/stimulus-pdf-viewer.git"
+  },
+  "keywords": [
+    "stimulus",
+    "hotwire",
+    "pdf",
+    "viewer",
+    "annotations",
+    "rails",
+    "turbo"
+  ]
+}
