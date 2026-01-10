@@ -1,7 +1,7 @@
 <div class="pdf-toolbar">
   <%# Left section: Sidebar toggle + Page navigation + Zoom %>
   <div class="pdf-toolbar-section pdf-toolbar-left">
-    <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#toggleSidebar" title="<%= t('pdf_viewer.toggle_thumbnails') %>">
+    <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#toggleSidebar" title="Toggle thumbnails">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="7" height="18" rx="1" />
         <line x1="14" y1="6" x2="21" y2="6" />
@@ -13,7 +13,7 @@
     <div class="pdf-toolbar-separator"></div>
 
     <div class="pdf-toolbar-group pdf-toolbar-nav">
-      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#previousPage" title="<%= t('pdf_viewer.previous_page') %>" data-pdf-viewer-target="prevBtn">
+      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#previousPage" title="Previous page" data-pdf-viewer-target="prevBtn">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 12L3 7l5-5v10z" />
         </svg>
@@ -23,7 +23,7 @@
         <span class="pdf-page-separator">/</span>
         <span class="pdf-page-count" data-pdf-viewer-target="pageCount">-</span>
       </div>
-      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#nextPage" title="<%= t('pdf_viewer.next_page') %>" data-pdf-viewer-target="nextBtn">
+      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#nextPage" title="Next page" data-pdf-viewer-target="nextBtn">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 4l5 5-5 5V4z" />
         </svg>
@@ -33,7 +33,7 @@
     <div class="pdf-toolbar-separator"></div>
 
     <div class="pdf-toolbar-group pdf-toolbar-zoom">
-      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#zoomOut" title="<%= t('pdf_viewer.zoom_out') %>">
+      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#zoomOut" title="Zoom out">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -41,10 +41,10 @@
         </svg>
       </button>
       <select class="pdf-zoom-select" data-action="change->pdf-viewer#setZoom" data-pdf-viewer-target="zoomSelect">
-        <option value="auto" selected><%= t('pdf_viewer.zoom_auto') %></option>
-        <option value="page-width"><%= t('pdf_viewer.zoom_page_width') %></option>
-        <option value="page-fit"><%= t('pdf_viewer.zoom_page_fit') %></option>
-        <option value="page-actual"><%= t('pdf_viewer.zoom_actual_size') %></option>
+        <option value="auto" selected>Auto</option>
+        <option value="page-width">Page Width</option>
+        <option value="page-fit">Page Fit</option>
+        <option value="page-actual">Actual Size</option>
         <option disabled>-----</option>
         <option value="0.5">50%</option>
         <option value="0.75">75%</option>
@@ -54,7 +54,7 @@
         <option value="2">200%</option>
         <option value="3">300%</option>
       </select>
-      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#zoomIn" title="<%= t('pdf_viewer.zoom_in') %>">
+      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#zoomIn" title="Zoom in">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -68,41 +68,41 @@
   <%# Right section: Annotation tools %>
   <div class="pdf-toolbar-section pdf-toolbar-right">
     <div class="pdf-toolbar-group pdf-toolbar-tools">
-      <button class="pdf-tool-btn active" data-tool="select" data-action="click->pdf-viewer#selectTool" aria-label="<%= t('pdf_viewer.tool_select') %>">
+      <button class="pdf-tool-btn active" data-tool="select" data-action="click->pdf-viewer#selectTool" aria-label="Select tool">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
           <path d="M13 13l6 6" />
         </svg>
-        <span><%= t('pdf_viewer.select') %></span>
+        <span>Select</span>
       </button>
-      <button class="pdf-tool-btn" data-tool="highlight" data-action="click->pdf-viewer#selectTool" aria-label="<%= t('pdf_viewer.tool_highlight') %>">
+      <button class="pdf-tool-btn" data-tool="highlight" data-action="click->pdf-viewer#selectTool" aria-label="Highlight tool">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 20h9" />
           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
           <rect x="2" y="18" width="8" height="4" rx="1" fill="#FFEB3B" stroke="none" />
         </svg>
-        <span><%= t('pdf_viewer.highlight') %></span>
+        <span>Highlight</span>
       </button>
-      <button class="pdf-tool-btn" data-tool="underline" data-action="click->pdf-viewer#selectTool" aria-label="<%= t('pdf_viewer.tool_underline') %>">
+      <button class="pdf-tool-btn" data-tool="underline" data-action="click->pdf-viewer#selectTool" aria-label="Underline tool">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
           <line x1="4" y1="21" x2="20" y2="21" stroke-width="3" />
         </svg>
-        <span><%= t('pdf_viewer.underline') %></span>
+        <span>Underline</span>
       </button>
-      <button class="pdf-tool-btn" data-tool="note" data-action="click->pdf-viewer#selectTool" aria-label="<%= t('pdf_viewer.tool_note') %>">
+      <button class="pdf-tool-btn" data-tool="note" data-action="click->pdf-viewer#selectTool" aria-label="Add note">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="#FFF9C4" />
           <line x1="8" y1="9" x2="16" y2="9" />
           <line x1="8" y1="13" x2="14" y2="13" />
         </svg>
-        <span><%= t('pdf_viewer.add_note') %></span>
+        <span>Add Note</span>
       </button>
-      <button class="pdf-tool-btn" data-tool="ink" data-action="click->pdf-viewer#selectTool" aria-label="<%= t('pdf_viewer.tool_draw') %>">
+      <button class="pdf-tool-btn" data-tool="ink" data-action="click->pdf-viewer#selectTool" aria-label="Draw tool">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
         </svg>
-        <span><%= t('pdf_viewer.draw') %></span>
+        <span>Draw</span>
       </button>
     </div>
 
@@ -115,7 +115,7 @@
     <div class="pdf-toolbar-separator"></div>
 
     <div class="pdf-toolbar-group pdf-toolbar-actions">
-      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#toggleSearch" title="<%= t('pdf_viewer.search_with_hint') %>">
+      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#toggleSearch" title="Search (Ctrl+F)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -124,7 +124,7 @@
       <div class="pdf-toolbar-separator"></div>
 
       <%# Overflow menu button (visible on mobile only) %>
-      <button class="pdf-toolbar-overflow-btn" data-action="click->pdf-viewer#toggleOverflowMenu" title="<%= t('pdf_viewer.more_tools') %>" data-pdf-viewer-target="overflowBtn">
+      <button class="pdf-toolbar-overflow-btn" data-action="click->pdf-viewer#toggleOverflowMenu" title="More tools" data-pdf-viewer-target="overflowBtn">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="1" fill="currentColor" />
           <circle cx="12" cy="5" r="1" fill="currentColor" />
@@ -132,7 +132,7 @@
         </svg>
       </button>
 
-      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#toggleAnnotationSidebar" title="<%= t('pdf_viewer.annotations') %>">
+      <button class="pdf-toolbar-btn" data-action="click->pdf-viewer#toggleAnnotationSidebar" title="Annotations">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="17" y1="6" x2="21" y2="6" />
           <line x1="17" y1="12" x2="21" y2="12" />
@@ -147,7 +147,7 @@
       <%# Page Navigation %>
       <div class="pdf-overflow-section">
         <div class="pdf-overflow-row">
-          <button class="pdf-overflow-btn" data-action="click->pdf-viewer#previousPage" title="<%= t('pdf_viewer.previous_page') %>">
+          <button class="pdf-overflow-btn" data-action="click->pdf-viewer#previousPage" title="Previous page">
             <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 12L3 7l5-5v10z" />
             </svg>
@@ -157,7 +157,7 @@
             <span class="pdf-page-separator">/</span>
             <span data-pdf-viewer-target="overflowPageCount">-</span>
           </div>
-          <button class="pdf-overflow-btn" data-action="click->pdf-viewer#nextPage" title="<%= t('pdf_viewer.next_page') %>">
+          <button class="pdf-overflow-btn" data-action="click->pdf-viewer#nextPage" title="Next page">
             <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 4l5 5-5 5V4z" />
             </svg>
@@ -167,20 +167,20 @@
 
       <%# More Tools (underline, ink) %>
       <div class="pdf-overflow-section">
-        <div class="pdf-overflow-section-title"><%= t('pdf_viewer.more_tools') %></div>
+        <div class="pdf-overflow-section-title">More Tools</div>
         <div class="pdf-overflow-tools">
-          <button class="pdf-overflow-tool-btn" data-tool="underline" data-action="click->pdf-viewer#selectToolFromOverflow" aria-label="<%= t('pdf_viewer.tool_underline') %>">
+          <button class="pdf-overflow-tool-btn" data-tool="underline" data-action="click->pdf-viewer#selectToolFromOverflow" aria-label="Underline tool">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
               <line x1="4" y1="21" x2="20" y2="21" stroke-width="3" />
             </svg>
-            <span><%= t('pdf_viewer.underline') %></span>
+            <span>Underline</span>
           </button>
-          <button class="pdf-overflow-tool-btn" data-tool="ink" data-action="click->pdf-viewer#selectToolFromOverflow" aria-label="<%= t('pdf_viewer.tool_draw') %>">
+          <button class="pdf-overflow-tool-btn" data-tool="ink" data-action="click->pdf-viewer#selectToolFromOverflow" aria-label="Draw tool">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
             </svg>
-            <span><%= t('pdf_viewer.draw') %></span>
+            <span>Draw</span>
           </button>
         </div>
       </div>
@@ -193,7 +193,7 @@
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <span><%= t('pdf_viewer.search') %></span>
+            <span>Search</span>
           </button>
           <button class="pdf-overflow-action-btn" data-action="click->pdf-viewer#toggleSidebar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -202,7 +202,7 @@
               <line x1="14" y1="12" x2="21" y2="12" />
               <line x1="14" y1="18" x2="21" y2="18" />
             </svg>
-            <span><%= t('pdf_viewer.thumbnails') %></span>
+            <span>Thumbnails</span>
           </button>
           <button class="pdf-overflow-action-btn" data-action="click->pdf-viewer#toggleAnnotationSidebar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -211,7 +211,7 @@
               <line x1="17" y1="18" x2="21" y2="18" />
               <rect x="3" y="3" width="7" height="18" rx="1" />
             </svg>
-            <span><%= t('pdf_viewer.annotations') %></span>
+            <span>Annotations</span>
           </button>
         </div>
       </div>

@@ -1,45 +1,54 @@
-<% if document.previewable? %>
-  <% if document.pdf? %>
-    <div class="pdf-viewer-container"
-         data-controller="pdf-viewer"
-         data-pdf-viewer-target="container"
-         data-pdf-viewer-document-url-value="<%= rails_storage_proxy_path(document.file) %>"
-         data-pdf-viewer-document-name-value="<%= document.name %>"
-         data-pdf-viewer-organization-name-value="<%= Current.organization.name %>"
-         data-pdf-viewer-annotations-url-value="<%= document_annotations_path(document) %>"
-         data-pdf-viewer-document-id-value="<%= document.id %>"
-         data-pdf-viewer-tracking-url-value="<%= update_time_tracking_document_path(document) %>"
-         data-pdf-viewer-user-name-value="<%= current_user.name %>"
-         data-pdf-viewer-initial-page-value="<%= params[:page].to_i if params[:page].present? %>"
-         data-pdf-viewer-initial-annotation-value="<%= params[:annotation] %>">
-      <div class="pdf-viewer-toolbar">
-        <%= render "documents/pdf_viewer_toolbar",
-            document: document,
-            close_url: local_assigns[:close_url],
-            can_edit: local_assigns[:can_edit],
-            can_download: local_assigns[:can_download],
-            compare_options: local_assigns[:compare_options] %>
-      </div>
-      <div class="pdf-viewer-body">
-        <div class="pdf-loading-overlay" data-pdf-viewer-target="loadingOverlay">
-          <div class="pdf-loading-spinner"></div>
-          <div class="pdf-loading-text"><%= t('pdf_viewer.loading') %></div>
-        </div>
-        <div class="pdf-pages-container" data-pdf-sync-scroll-target="container" data-action="scroll->pdf-sync-scroll#sync"></div>
-      </div>
-    </div>
-  <% elsif document.image? %>
-    <div class="text-center mt-3">
-      <%= image_tag rails_storage_proxy_path(document.file), alt: document.name, style: "max-width: 90%" %>
-    </div>
-  <% end %>
-<% elsif document.file.attached? %>
-  <div class="m-4 alert alert-dark text-center">
-    <p><%= t('documents.show.file_not_previewable') %></p>
-    <%= download_button t('documents.show.download'), rails_storage_proxy_path(document.file), class: 'btn btn-primary' %>
+<%#
+  PDF Viewer partial example for Rails
+
+  Required local variables:
+    - document: An object with `file` (ActiveStorage attachment) and `name` attributes
+    - annotations_url: Path to the annotations REST endpoint
+
+  Optional local variables:
+    - user_name: Current user's name (for watermarks)
+    - organization_name: Organization name (for watermarks)
+    - initial_page: Page number to open on load
+    - initial_annotation: Annotation ID to highlight on load
+    - tracking_url: Endpoint for time tracking (optional)
+%>
+
+<div class="pdf-viewer-container"
+     data-controller="pdf-viewer"
+     data-pdf-viewer-target="container"
+     data-pdf-viewer-document-url-value="<%= url_for(document.file) %>"
+     data-pdf-viewer-document-name-value="<%= document.name %>"
+     data-pdf-viewer-annotations-url-value="<%= annotations_url %>"
+     <% if local_assigns[:user_name] %>
+       data-pdf-viewer-user-name-value="<%= user_name %>"
+     <% end %>
+     <% if local_assigns[:organization_name] %>
+       data-pdf-viewer-organization-name-value="<%= organization_name %>"
+     <% end %>
+     <% if local_assigns[:initial_page] %>
+       data-pdf-viewer-initial-page-value="<%= initial_page %>"
+     <% end %>
+     <% if local_assigns[:initial_annotation] %>
+       data-pdf-viewer-initial-annotation-value="<%= initial_annotation %>"
+     <% end %>
+     <% if local_assigns[:tracking_url] %>
+       data-pdf-viewer-tracking-url-value="<%= tracking_url %>"
+     <% end %>>
+
+  <%# Toolbar - render the toolbar partial %>
+  <div class="pdf-viewer-toolbar">
+    <%= render "path/to/toolbar" %>
   </div>
-<% else %>
-  <div class="m-4 alert alert-dark text-center">
-    <p><%= t('documents.show.file_missing') %></p>
+
+  <%# Main viewer body %>
+  <div class="pdf-viewer-body">
+    <%# Loading overlay - shown while PDF loads %>
+    <div class="pdf-loading-overlay" data-pdf-viewer-target="loadingOverlay">
+      <div class="pdf-loading-spinner"></div>
+      <div class="pdf-loading-text">Loading document...</div>
+    </div>
+
+    <%# PDF pages container - pages are rendered here by JavaScript %>
+    <div class="pdf-pages-container"></div>
   </div>
-<% end %>
+</div>
