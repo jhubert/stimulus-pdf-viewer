@@ -1,4 +1,5 @@
-import { FetchRequest } from "@rails/request.js"
+import { RestAnnotationStore } from "./stores/rest_annotation_store.js"
+import { MemoryAnnotationStore } from "./stores/memory_annotation_store.js"
 
 // Custom event types for error handling
 export const AnnotationErrorType = {
@@ -10,13 +11,31 @@ export const AnnotationErrorType = {
 }
 
 export class AnnotationManager {
+  /**
+   * @param {Object} options
+   * @param {AnnotationStore} [options.store] - Custom store implementation
+   * @param {string} [options.annotationsUrl] - Base URL for REST store (creates RestAnnotationStore)
+   * @param {number} [options.documentId] - Document ID
+   * @param {Function} [options.onAnnotationCreated] - Callback when annotation created
+   * @param {Function} [options.onAnnotationUpdated] - Callback when annotation updated
+   * @param {Function} [options.onAnnotationDeleted] - Callback when annotation deleted
+   * @param {Element} [options.eventTarget] - Element for dispatching error events
+   */
   constructor(options = {}) {
-    this.annotationsUrl = options.annotationsUrl
     this.documentId = options.documentId
     this.onAnnotationCreated = options.onAnnotationCreated
     this.onAnnotationUpdated = options.onAnnotationUpdated
     this.onAnnotationDeleted = options.onAnnotationDeleted
-    this.eventTarget = options.eventTarget // Optional element for dispatching events
+    this.eventTarget = options.eventTarget
+
+    // Determine store: explicit > REST URL > memory
+    if (options.store) {
+      this.store = options.store
+    } else if (options.annotationsUrl) {
+      this.store = new RestAnnotationStore({ baseUrl: options.annotationsUrl })
+    } else {
+      this.store = new MemoryAnnotationStore()
+    }
 
     this.annotations = new Map() // id -> annotation
     this.annotationsByPage = new Map() // pageNumber -> [annotations]
@@ -41,15 +60,8 @@ export class AnnotationManager {
 
   async loadAnnotations() {
     try {
-      const request = new FetchRequest("get", `${this.annotationsUrl}.json`)
-      const response = await request.perform()
-
-      if (response.ok) {
-        const data = await response.json
-        this._processAnnotations(data)
-      } else {
-        throw new Error("Server returned an error")
-      }
+      const annotations = await this.store.load()
+      this._processAnnotations(annotations)
     } catch (error) {
       console.error("Failed to load annotations:", error)
       this._dispatchError(AnnotationErrorType.LOAD_FAILED, "Failed to load annotations", error)
@@ -85,26 +97,14 @@ export class AnnotationManager {
 
   async createAnnotation(data) {
     try {
-      const request = new FetchRequest("post", this.annotationsUrl, {
-        body: JSON.stringify({ annotation: data }),
-        contentType: "application/json",
-        responseKind: "json"
-      })
+      const annotation = await this.store.create(data)
+      this._addAnnotation(annotation)
 
-      const response = await request.perform()
-
-      if (response.ok) {
-        const annotation = await response.json
-        this._addAnnotation(annotation)
-
-        if (this.onAnnotationCreated) {
-          this.onAnnotationCreated(annotation)
-        }
-
-        return annotation
-      } else {
-        throw new Error("Failed to create annotation")
+      if (this.onAnnotationCreated) {
+        this.onAnnotationCreated(annotation)
       }
+
+      return annotation
     } catch (error) {
       console.error("Failed to create annotation:", error)
       this._dispatchError(AnnotationErrorType.CREATE_FAILED, "Failed to save annotation", error)
@@ -114,26 +114,14 @@ export class AnnotationManager {
 
   async updateAnnotation(id, data) {
     try {
-      const request = new FetchRequest("patch", `${this.annotationsUrl}/${id}`, {
-        body: JSON.stringify({ annotation: data }),
-        contentType: "application/json",
-        responseKind: "json"
-      })
+      const annotation = await this.store.update(id, data)
+      this._updateAnnotation(annotation)
 
-      const response = await request.perform()
-
-      if (response.ok) {
-        const annotation = await response.json
-        this._updateAnnotation(annotation)
-
-        if (this.onAnnotationUpdated) {
-          this.onAnnotationUpdated(annotation)
-        }
-
-        return annotation
-      } else {
-        throw new Error("Failed to update annotation")
+      if (this.onAnnotationUpdated) {
+        this.onAnnotationUpdated(annotation)
       }
+
+      return annotation
     } catch (error) {
       console.error("Failed to update annotation:", error)
       this._dispatchError(AnnotationErrorType.UPDATE_FAILED, "Failed to update annotation", error)
@@ -142,26 +130,18 @@ export class AnnotationManager {
   }
 
   async deleteAnnotation(id) {
+    const existingAnnotation = this.annotations.get(id)
+    if (!existingAnnotation) return
+
     try {
-      const annotation = this.annotations.get(id)
-      if (!annotation) return
+      const annotation = await this.store.delete(id)
+      this._removeAnnotation(id)
 
-      const request = new FetchRequest("delete", `${this.annotationsUrl}/${id}`, {
-        responseKind: "json"
-      })
-      const response = await request.perform()
-
-      if (response.ok) {
-        this._removeAnnotation(id)
-
-        if (this.onAnnotationDeleted) {
-          this.onAnnotationDeleted(annotation)
-        }
-
-        return annotation
-      } else {
-        throw new Error("Failed to delete annotation")
+      if (this.onAnnotationDeleted) {
+        this.onAnnotationDeleted(existingAnnotation)
       }
+
+      return existingAnnotation
     } catch (error) {
       console.error("Failed to delete annotation:", error)
       this._dispatchError(AnnotationErrorType.DELETE_FAILED, "Failed to delete annotation", error)
@@ -171,23 +151,16 @@ export class AnnotationManager {
 
   async restoreAnnotation(id) {
     try {
-      const request = new FetchRequest("patch", `${this.annotationsUrl}/${id}/restore`, {
-        responseKind: "json"
-      })
-      const response = await request.perform()
+      const annotation = await this.store.restore(id)
+      if (!annotation) return null
 
-      if (response.ok) {
-        const annotation = await response.json
-        this._addAnnotation(annotation)
+      this._addAnnotation(annotation)
 
-        if (this.onAnnotationCreated) {
-          this.onAnnotationCreated(annotation)
-        }
-
-        return annotation
-      } else {
-        throw new Error("Failed to restore annotation")
+      if (this.onAnnotationCreated) {
+        this.onAnnotationCreated(annotation)
       }
+
+      return annotation
     } catch (error) {
       console.error("Failed to restore annotation:", error)
       this._dispatchError(AnnotationErrorType.RESTORE_FAILED, "Failed to restore annotation", error)

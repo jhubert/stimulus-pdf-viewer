@@ -8,3 +8,10 @@ export { default as PdfSyncScrollController } from "./controllers/pdf_sync_scrol
 
 // Core library exports
 export { PdfViewer, ToolMode, CoreViewer, ViewerEvents } from "./lib"
+
+// Annotation stores for custom persistence
+export {
+  AnnotationStore,
+  RestAnnotationStore,
+  MemoryAnnotationStore
+} from "./lib/stores"

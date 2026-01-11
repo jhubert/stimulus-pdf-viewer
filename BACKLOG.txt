@@ -1,0 +1,77 @@
+PDF Viewer - Backlog
+====================
+
+Priorities:
+  P0 = Critical - Broken functionality for significant user groups
+  P1 = High     - User-facing bugs, quick wins with high impact
+  P2 = Medium   - Code quality, maintainability, accessibility
+  P3 = Low      - Nice to have, future-proofing, minor improvements
+
+================================================================================
+P3 - LOW PRIORITY
+================================================================================
+
+Browser Compatibility:
+----------------------
+[ ] Test and fix Safari Selection API edge cases
+    File: coordinate_transformer.js
+    Why: Safari may return different rect ordering for multi-line selections
+    Effort: Medium (requires Safari testing)
+
+[ ] Test form control styling on Edge
+    File: _pdf_viewer.scss
+    Why: Select dropdowns (.pdf-zoom-select, .annotation-filter-select) use
+         custom arrow via background SVG with appearance:none, but some
+         browsers may still show native styling
+    Effort: Small
+
+Accessibility:
+--------------
+[ ] Add keyboard navigation for annotations on PDF
+    Files: viewer.js, annotation layer rendering
+    Why: Annotation layer items are not in tab order (only clickable),
+         can't navigate between annotations with arrow keys
+    Effort: Large
+
+Code Quality:
+-------------
+
+[ ] Add JSDoc types to all public methods
+    Why: Better IDE support, documentation, refactoring safety
+    Effort: Large
+
+[ ] Standardize CSS class naming convention
+    File: _pdf_viewer.scss
+    Why: Mix of BEM-like (.annotation-list-item, .pdf-toolbar-btn),
+         flat (.thumbnail, .annotation), and camelCase (.is-drawing)
+    Effort: Large (breaking change)
+
+Future Enhancements:
+--------------------
+[ ] Internationalization (i18n) support
+    Why: All UI strings are hardcoded in English throughout the codebase
+    Affected strings:
+      - Toolbar labels: "Select", "Highlight", "Underline", "Add Note", "Draw", "Download"
+      - Sidebar titles: "Annotations", "Pages"
+      - Button titles/tooltips: "Previous Page", "Next Page", "Zoom In/Out", etc.
+      - Empty states: "No annotations yet", "Use the toolbar tools to add..."
+      - Undo bar messages: "Highlight deleted", "Note deleted", etc.
+      - Error messages: "Failed to load PDF document", "Failed to download PDF"
+      - Find bar: "Find in document...", "No results"
+      - annotation_sidebar.js: Type labels, sort buttons, filter options, "Yesterday"
+      - color_picker.js: Color names for aria-labels ("Orange", "Yellow", etc.)
+    Recommendation: Move toolbar HTML to ERB partial (P2) which enables Rails I18n,
+                    or use data attributes to pass translations
+    Effort: Large
+
+[ ] Multi-level undo support
+    File: undo_bar.js
+    Why: Currently only supports undoing single most recent delete;
+         multiple deletes lose earlier annotations permanently
+    Effort: Medium
+
+[ ] Turbo Streams for real-time annotation updates
+    Why: Multiple users viewing same document could see live updates
+    Note: Currently viewer uses Stimulus connect/disconnect lifecycle,
+          which works but doesn't leverage Turbo's caching or morphing
+    Effort: Large

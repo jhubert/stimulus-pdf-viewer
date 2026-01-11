@@ -85,7 +85,9 @@ export class PdfViewer {
     this._setupViewerEvents()
 
     // Annotation manager for CRUD operations
+    // Accepts custom store, falls back to REST store if URL provided, else memory store
     this.annotationManager = new AnnotationManager({
+      store: this.options.annotationStore,
       annotationsUrl: this.annotationsUrl,
       documentId: this.documentId,
       eventTarget: this.container, // For dispatching error events
@@ -300,10 +302,8 @@ export class PdfViewer {
         await this.thumbnailSidebar.setDocument(this.viewer.pdfDocument)
       }
 
-      // Load existing annotations (skip if no URL configured)
-      if (this.annotationsUrl) {
-        await this.annotationManager.loadAnnotations()
-      }
+      // Load existing annotations from store
+      await this.annotationManager.loadAnnotations()
 
       // Render annotations on all rendered pages
       this._renderAnnotations()
