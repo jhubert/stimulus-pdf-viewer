@@ -21,6 +21,10 @@ npm-debug.log*
 # Test coverage
 coverage/
 
+# Dev server generated files
+dev/styles.css
+dev/pdf_viewer/
+
 # Misc
 .env
 .env.local
