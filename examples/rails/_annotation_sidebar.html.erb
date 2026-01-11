@@ -1,0 +1,114 @@
+<%#
+  Custom Annotation Sidebar partial example for Rails
+
+  This partial demonstrates how to provide your own HTML structure for the
+  annotation sidebar, enabling full customization of the UI and behavior.
+
+  Place this inside the .pdf-viewer-body element, after .pdf-pages-container.
+
+  If you don't include this partial, the default sidebar will be auto-generated.
+
+  Features:
+    - Full control over sidebar structure and styling
+    - Custom annotation item template with data-field placeholders
+    - Add your own Stimulus controllers to annotation items
+    - Customize icons, text, and add custom actions (share, comment, etc.)
+%>
+
+<%# Annotation Sidebar - user-defined HTML structure %>
+<div class="pdf-sidebar is-right pdf-annotation-sidebar"
+     data-pdf-sidebar="annotations">
+
+  <%# Sidebar Header %>
+  <div class="pdf-sidebar-header">
+    <div class="pdf-sidebar-header-left">
+      <span class="pdf-sidebar-title">Annotations</span>
+      <span class="annotation-count-badge" data-role="count">0</span>
+    </div>
+    <button class="pdf-sidebar-close" data-action="close" type="button" aria-label="Close sidebar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+
+  <%# Sort and Filter Controls %>
+  <div class="annotation-controls-wrapper">
+    <div class="annotation-sort-controls" data-role="sort-controls">
+      <button class="sort-btn active" data-sort="page">Page</button>
+      <button class="sort-btn" data-sort="newest">Newest</button>
+      <button class="sort-btn" data-sort="oldest">Oldest</button>
+    </div>
+
+    <div class="annotation-filter-controls" data-role="filter-controls">
+      <select class="annotation-filter-select" data-action="filter">
+        <option value="all">All</option>
+        <option value="highlight">Highlights</option>
+        <option value="note">Notes</option>
+        <option value="drawing">Drawings</option>
+        <option value="underline">Underlines</option>
+      </select>
+    </div>
+  </div>
+
+  <%# Scrollable Annotation List %>
+  <div class="pdf-sidebar-content annotation-list" data-role="list">
+    <%# Annotation items are dynamically inserted here %>
+  </div>
+
+  <%# Empty State %>
+  <div class="annotation-empty-state" data-role="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 20h9"/>
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </svg>
+    <p>No annotations yet</p>
+    <p class="hint">Use the toolbar tools to add highlights, notes, or drawings</p>
+  </div>
+
+  <%# Resize Handle %>
+  <div class="pdf-sidebar-resizer" data-role="resizer"></div>
+</div>
+
+<%#
+  Annotation Item Template
+
+  This template is cloned for each annotation. The library populates elements
+  with data-field attributes:
+    - icon: SVG icon based on annotation type
+    - label: Annotation text content (truncated)
+    - type: Human-readable type (Highlight, Note, Drawing, Underline)
+    - page: Page number (e.g., "Page 3")
+    - time: Relative timestamp (e.g., "2 hours ago")
+
+  The cloned element also receives data attributes you can use in Stimulus:
+    - data-annotation-id: The annotation's unique ID
+    - data-annotation-type: The annotation type (highlight, note, ink, line)
+    - data-annotation-page: The page number
+    - data-annotation-color: The annotation color (hex)
+
+  You can add your own Stimulus controllers to the template. When the template
+  is cloned and added to the DOM, Stimulus will automatically connect.
+%>
+<template data-pdf-template="annotation-item">
+  <div class="annotation-list-item" tabindex="0">
+    <div class="annotation-item-icon" data-field="icon"></div>
+    <div class="annotation-item-content">
+      <div class="annotation-item-label" data-field="label"></div>
+      <div class="annotation-item-meta">
+        <span data-field="type"></span>
+        <span class="annotation-item-separator">•</span>
+        <span data-field="page"></span>
+        <span class="annotation-item-separator">•</span>
+        <span data-field="time"></span>
+      </div>
+    </div>
+    <div class="annotation-item-hover">
+      <span>Jump</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </div>
+  </div>
+</template>

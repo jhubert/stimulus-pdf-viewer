@@ -1,0 +1,191 @@
+<%#
+  Advanced Annotation Sidebar with Custom Actions
+
+  This example demonstrates how to add custom functionality to annotation items
+  using your own Stimulus controller. Features include:
+    - Share button for each annotation
+    - Comment count display
+    - Delete confirmation
+
+  This example assumes you have an AnnotationActionsController in your app.
+%>
+
+<%# Annotation Sidebar with custom styling %>
+<div class="pdf-sidebar is-right pdf-annotation-sidebar"
+     data-pdf-sidebar="annotations">
+
+  <div class="pdf-sidebar-header">
+    <div class="pdf-sidebar-header-left">
+      <span class="pdf-sidebar-title">Annotations</span>
+      <span class="annotation-count-badge" data-role="count">0</span>
+    </div>
+    <button class="pdf-sidebar-close" data-action="close" type="button" aria-label="Close sidebar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+  </div>
+
+  <div class="annotation-controls-wrapper">
+    <div class="annotation-sort-controls" data-role="sort-controls">
+      <button class="sort-btn active" data-sort="page">Page</button>
+      <button class="sort-btn" data-sort="newest">Newest</button>
+      <button class="sort-btn" data-sort="oldest">Oldest</button>
+    </div>
+
+    <div class="annotation-filter-controls" data-role="filter-controls">
+      <select class="annotation-filter-select" data-action="filter">
+        <option value="all">All</option>
+        <option value="highlight">Highlights</option>
+        <option value="note">Notes</option>
+        <option value="drawing">Drawings</option>
+        <option value="underline">Underlines</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="pdf-sidebar-content annotation-list" data-role="list"></div>
+
+  <div class="annotation-empty-state" data-role="empty-state">
+    <p>No annotations yet</p>
+  </div>
+
+  <div class="pdf-sidebar-resizer" data-role="resizer"></div>
+</div>
+
+<%#
+  Custom Annotation Item Template with Stimulus Controller
+
+  This template adds:
+  - A Stimulus controller for custom actions
+  - Share and delete buttons
+  - Comment count indicator
+
+  When cloned, Stimulus automatically connects the annotation-actions controller.
+  Your controller can access the annotation ID via this.element.dataset.annotationId
+%>
+<template data-pdf-template="annotation-item">
+  <div class="annotation-list-item"
+       data-controller="annotation-actions"
+       tabindex="0">
+
+    <%# Main content area (clicking here jumps to annotation) %>
+    <div class="annotation-item-main">
+      <div class="annotation-item-icon" data-field="icon"></div>
+      <div class="annotation-item-content">
+        <div class="annotation-item-label" data-field="label"></div>
+        <div class="annotation-item-meta">
+          <span data-field="type"></span>
+          <span class="annotation-item-separator">•</span>
+          <span data-field="page"></span>
+          <span class="annotation-item-separator">•</span>
+          <span data-field="time"></span>
+        </div>
+      </div>
+    </div>
+
+    <%# Custom action buttons %>
+    <div class="annotation-item-actions">
+      <%# Share button %>
+      <button class="annotation-action-btn"
+              data-action="click->annotation-actions#share"
+              title="Share annotation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+      </button>
+
+      <%# Comments indicator (if you have a comments system) %>
+      <button class="annotation-action-btn annotation-comments-btn"
+              data-action="click->annotation-actions#showComments"
+              data-annotation-actions-target="commentsBtn"
+              title="View comments">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span class="annotation-comments-count" data-annotation-actions-target="commentsCount"></span>
+      </button>
+
+      <%# Delete button %>
+      <button class="annotation-action-btn annotation-action-btn--danger"
+              data-action="click->annotation-actions#confirmDelete"
+              title="Delete annotation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</template>
+
+<%#
+  Example Stimulus Controller (add to your app's JavaScript)
+
+  // app/javascript/controllers/annotation_actions_controller.js
+  import { Controller } from "@hotwired/stimulus"
+
+  export default class extends Controller {
+    static targets = ["commentsBtn", "commentsCount"]
+
+    connect() {
+      // Access annotation data from data attributes
+      const annotationId = this.element.dataset.annotationId
+      const annotationType = this.element.dataset.annotationType
+      const annotationPage = this.element.dataset.annotationPage
+
+      // Load comment count for this annotation
+      this.loadCommentCount()
+    }
+
+    share(event) {
+      event.stopPropagation() // Prevent triggering the jump-to-annotation click
+      const annotationId = this.element.dataset.annotationId
+
+      // Generate shareable URL
+      const url = new URL(window.location)
+      url.searchParams.set("annotation", annotationId)
+
+      navigator.clipboard.writeText(url.toString())
+      alert("Link copied to clipboard!")
+    }
+
+    showComments(event) {
+      event.stopPropagation()
+      const annotationId = this.element.dataset.annotationId
+
+      // Open your comments panel/modal
+      this.dispatch("openComments", { detail: { annotationId } })
+    }
+
+    confirmDelete(event) {
+      event.stopPropagation()
+
+      if (confirm("Delete this annotation?")) {
+        const annotationId = this.element.dataset.annotationId
+
+        // Dispatch event for the PDF viewer to handle deletion
+        this.element.dispatchEvent(new CustomEvent("pdf-viewer:delete-annotation", {
+          bubbles: true,
+          detail: { annotationId }
+        }))
+      }
+    }
+
+    async loadCommentCount() {
+      // Example: fetch comment count from your API
+      // const annotationId = this.element.dataset.annotationId
+      // const response = await fetch(`/annotations/${annotationId}/comments/count`)
+      // const { count } = await response.json()
+      // if (count > 0) {
+      //   this.commentsCountTarget.textContent = count
+      //   this.commentsBtnTarget.classList.add("has-comments")
+      // }
+    }
+  }
+%>

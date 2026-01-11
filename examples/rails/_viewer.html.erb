@@ -50,5 +50,19 @@
 
     <%# PDF pages container - pages are rendered here by JavaScript %>
     <div class="pdf-pages-container"></div>
+
+    <%#
+      Optional: Custom Annotation Sidebar
+
+      If you want to customize the annotation sidebar, include your own HTML here.
+      If omitted, a default sidebar will be auto-generated.
+
+      See _annotation_sidebar.html.erb for a basic example.
+      See _annotation_sidebar_with_actions.html.erb for an advanced example with
+      custom Stimulus controllers.
+
+      Example:
+        <%= render "annotation_sidebar" %>
+    %>
   </div>
 </div>

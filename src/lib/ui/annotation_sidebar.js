@@ -51,10 +51,10 @@ const ANNOTATION_ICONS = {
 }
 
 export class AnnotationSidebar {
-  constructor({ container, annotationManager, onAnnotationClick }) {
-    this.container = container
+  constructor({ element, itemTemplate, container, annotationManager, onAnnotationClick }) {
     this.annotationManager = annotationManager
     this.onAnnotationClick = onAnnotationClick
+    this.itemTemplate = itemTemplate  // Optional <template> element for custom list items
 
     this.isOpen = false
     this.sidebarWidth = SIDEBAR_DEFAULT_WIDTH
@@ -62,7 +62,30 @@ export class AnnotationSidebar {
     this.filterType = FilterType.ALL
     this.selectedAnnotationId = null
 
-    this._createElements()
+    if (element) {
+      // User provided HTML - find elements via data attributes
+      this.element = element
+      this.container = element.parentElement
+      this.listContainer = element.querySelector('[data-role="list"]')
+      this.header = element.querySelector('.pdf-sidebar-header')
+      this.emptyState = element.querySelector('[data-role="empty-state"]')
+      this.sortControls = element.querySelector('[data-role="sort-controls"]')
+      this.filterControls = element.querySelector('[data-role="filter-controls"]')
+      this.resizer = element.querySelector('[data-role="resizer"]')
+
+      // Read initial width from CSS variable if set
+      const currentWidth = element.style.getPropertyValue('--sidebar-width')
+      if (currentWidth) {
+        this.sidebarWidth = parseInt(currentWidth, 10) || SIDEBAR_DEFAULT_WIDTH
+      } else {
+        element.style.setProperty('--sidebar-width', `${this.sidebarWidth}px`)
+      }
+    } else {
+      // Fallback - create default HTML (existing behavior)
+      this.container = container
+      this._createElements()
+    }
+
     this._setupEventListeners()
   }
 
@@ -145,27 +168,35 @@ export class AnnotationSidebar {
   }
 
   _setupEventListeners() {
-    // Close button
-    const closeBtn = this.header.querySelector(".pdf-sidebar-close")
-    closeBtn.addEventListener("click", () => this.close())
+    // Close button - support both user HTML (data-action="close") and auto-generated (.pdf-sidebar-close)
+    const closeBtn = this.header?.querySelector('[data-action="close"]') ||
+                     this.header?.querySelector(".pdf-sidebar-close")
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => this.close())
+    }
 
     // Sort buttons
-    this.sortControls.addEventListener("click", (e) => {
-      const btn = e.target.closest(".sort-btn")
-      if (btn) {
-        this.sortMode = btn.dataset.sort
-        this.sortControls.querySelectorAll(".sort-btn").forEach(b => b.classList.remove("active"))
-        btn.classList.add("active")
-        this._refreshList()
-      }
-    })
+    if (this.sortControls) {
+      this.sortControls.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-sort]") || e.target.closest(".sort-btn")
+        if (btn && btn.dataset.sort) {
+          this.sortMode = btn.dataset.sort
+          this.sortControls.querySelectorAll("[data-sort], .sort-btn").forEach(b => b.classList.remove("active"))
+          btn.classList.add("active")
+          this._refreshList()
+        }
+      })
+    }
 
-    // Filter select
-    const filterSelect = this.filterControls.querySelector(".annotation-filter-select")
-    filterSelect.addEventListener("change", (e) => {
-      this.filterType = e.target.value
-      this._refreshList()
-    })
+    // Filter select - support both user HTML (data-action="filter") and auto-generated (.annotation-filter-select)
+    const filterSelect = this.filterControls?.querySelector('[data-action="filter"]') ||
+                         this.filterControls?.querySelector(".annotation-filter-select")
+    if (filterSelect) {
+      filterSelect.addEventListener("change", (e) => {
+        this.filterType = e.target.value
+        this._refreshList()
+      })
+    }
 
     // Sidebar resizing
     this._setupResizer()
@@ -177,6 +208,8 @@ export class AnnotationSidebar {
   }
 
   _setupResizer() {
+    if (!this.resizer) return
+
     let startX, startWidth
 
     const onMouseMove = (e) => {
@@ -260,16 +293,19 @@ export class AnnotationSidebar {
     // Clear and rebuild list
     this.listContainer.innerHTML = ""
 
-    // Update count badge
-    const countBadge = this.header.querySelector(".annotation-count-badge")
-    countBadge.textContent = annotations.length
+    // Update count badge - support both user HTML (data-role="count") and auto-generated
+    const countBadge = this.header?.querySelector('[data-role="count"]') ||
+                       this.header?.querySelector(".annotation-count-badge")
+    if (countBadge) {
+      countBadge.textContent = annotations.length
+    }
 
     // Show empty state or list
     if (annotations.length === 0) {
-      this.emptyState.classList.add("visible")
+      this.emptyState?.classList.add("visible")
       this.listContainer.classList.add("empty")
     } else {
-      this.emptyState.classList.remove("visible")
+      this.emptyState?.classList.remove("visible")
       this.listContainer.classList.remove("empty")
 
       for (const annotation of annotations) {
@@ -338,40 +374,71 @@ export class AnnotationSidebar {
   }
 
   _createListItem(annotation) {
-    const item = document.createElement("div")
-    item.className = "annotation-list-item"
-    item.dataset.annotationId = annotation.id
-    item.tabIndex = 0
+    let item
 
+    if (this.itemTemplate) {
+      // Clone user's template and populate data-field elements
+      item = this.itemTemplate.content.firstElementChild.cloneNode(true)
+      item.dataset.annotationId = annotation.id
+
+      // Ensure tabIndex for keyboard navigation
+      if (!item.hasAttribute("tabindex")) {
+        item.tabIndex = 0
+      }
+
+      // Determine display values
+      const { icon, label, typeLabel } = this._getAnnotationDisplay(annotation)
+      const timestamp = this._formatTimestamp(annotation.created_at)
+
+      // Populate data-field elements
+      this._setField(item, "icon", icon, annotation.color)
+      this._setField(item, "label", this._escapeHtml(label))
+      this._setField(item, "type", typeLabel)
+      this._setField(item, "page", `Page ${annotation.page}`)
+      this._setField(item, "time", timestamp)
+
+      // Also set data attributes for user's Stimulus controllers
+      item.dataset.annotationType = annotation.annotation_type
+      item.dataset.annotationPage = annotation.page
+      item.dataset.annotationColor = annotation.color || ""
+    } else {
+      // Fallback - existing innerHTML approach
+      item = document.createElement("div")
+      item.className = "annotation-list-item"
+      item.dataset.annotationId = annotation.id
+      item.tabIndex = 0
+
+      // Determine icon and label based on type
+      const { icon, label, typeLabel } = this._getAnnotationDisplay(annotation)
+
+      // Format timestamp
+      const timestamp = this._formatTimestamp(annotation.created_at)
+
+      item.innerHTML = `
+        <div class="annotation-item-icon" style="color: ${annotation.color || '#666'}">
+          ${icon}
+        </div>
+        <div class="annotation-item-content">
+          <div class="annotation-item-label">${this._escapeHtml(label)}</div>
+          <div class="annotation-item-meta">
+            <span class="annotation-item-type">${typeLabel}</span>
+            <span class="annotation-item-separator">•</span>
+            <span class="annotation-item-page">Page ${annotation.page}</span>
+            <span class="annotation-item-separator">•</span>
+            <span class="annotation-item-time">${timestamp}</span>
+          </div>
+        </div>
+        <div class="annotation-item-hover">
+          <span>Jump</span>
+          ${Icons.chevronRight}
+        </div>
+      `
+    }
+
+    // Selection state
     if (this.selectedAnnotationId === annotation.id) {
       item.classList.add("selected")
     }
-
-    // Determine icon and label based on type
-    const { icon, label, typeLabel } = this._getAnnotationDisplay(annotation)
-
-    // Format timestamp
-    const timestamp = this._formatTimestamp(annotation.created_at)
-
-    item.innerHTML = `
-      <div class="annotation-item-icon" style="color: ${annotation.color || '#666'}">
-        ${icon}
-      </div>
-      <div class="annotation-item-content">
-        <div class="annotation-item-label">${this._escapeHtml(label)}</div>
-        <div class="annotation-item-meta">
-          <span class="annotation-item-type">${typeLabel}</span>
-          <span class="annotation-item-separator">•</span>
-          <span class="annotation-item-page">Page ${annotation.page}</span>
-          <span class="annotation-item-separator">•</span>
-          <span class="annotation-item-time">${timestamp}</span>
-        </div>
-      </div>
-      <div class="annotation-item-hover">
-        <span>Jump</span>
-        ${Icons.chevronRight}
-      </div>
-    `
 
     // Click handler
     item.addEventListener("click", () => {
@@ -382,6 +449,23 @@ export class AnnotationSidebar {
     })
 
     return item
+  }
+
+  /**
+   * Set a field value in a template-cloned element
+   * @param {HTMLElement} element - The cloned template element
+   * @param {string} fieldName - The data-field name to find
+   * @param {string} value - The value to set (can include HTML for icons)
+   * @param {string} color - Optional color to apply
+   */
+  _setField(element, fieldName, value, color) {
+    const field = element.querySelector(`[data-field="${fieldName}"]`)
+    if (field) {
+      field.innerHTML = value
+      if (color && fieldName === "icon") {
+        field.style.color = color
+      }
+    }
   }
 
   _getAnnotationDisplay(annotation) {

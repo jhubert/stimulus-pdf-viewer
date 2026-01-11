@@ -131,9 +131,14 @@ export class PdfViewer {
         onPageClick: (pageNumber) => this.viewer.goToPage(pageNumber)
       })
 
-      // Annotation sidebar (inserted after pages container in the body)
+      // Annotation sidebar - check for user-defined element, fallback to auto-generated
+      const annotationSidebarEl = this.container.querySelector('[data-pdf-sidebar="annotations"]')
+      const annotationItemTemplate = this.container.querySelector('[data-pdf-template="annotation-item"]')
+
       this.annotationSidebar = new AnnotationSidebar({
-        container: this.bodyContainer,
+        element: annotationSidebarEl,           // null if not provided (triggers fallback)
+        itemTemplate: annotationItemTemplate,   // null if not provided (uses innerHTML)
+        container: this.bodyContainer,          // Used for fallback
         annotationManager: this.annotationManager,
         onAnnotationClick: (annotationId) => this._scrollToAnnotationWithFlash(annotationId)
       })
