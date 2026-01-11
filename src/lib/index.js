@@ -300,8 +300,10 @@ export class PdfViewer {
         await this.thumbnailSidebar.setDocument(this.viewer.pdfDocument)
       }
 
-      // Load existing annotations
-      await this.annotationManager.loadAnnotations()
+      // Load existing annotations (skip if no URL configured)
+      if (this.annotationsUrl) {
+        await this.annotationManager.loadAnnotations()
+      }
 
       // Render annotations on all rendered pages
       this._renderAnnotations()
