@@ -25,7 +25,6 @@ npm run dev      # Watch mode for development
 **Stimulus Controllers**:
 - `PdfViewerController` - Main controller integrating viewer with DOM, toolbar actions, keyboard shortcuts
 - `PdfDownloadController` - Standalone download button controller
-- `PdfSyncScrollController` - Synchronized scrolling between multiple viewers
 
 **Library Core**:
 - `PdfViewer` class (`src/lib/index.js`) - High-level orchestrator managing tools, annotations, UI components
