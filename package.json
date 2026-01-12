@@ -1,6 +1,6 @@
 {
   "name": "stimulus-pdf-viewer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "PDF viewer with annotation support for Stimulus and Hotwire",
   "author": "Jeremy Baker",
   "license": "(MIT AND Apache-2.0)",
