@@ -142,12 +142,27 @@ export class AnnotationPopup {
     const date = new Date(annotation.created_at)
     dateElement.textContent = date.toLocaleDateString()
 
-    // Show content for notes, highlighted text for highlights
-    if (annotation.annotation_type === "note" && annotation.contents) {
+    // Show content based on annotation type
+    // Notes: show contents
+    // Other types: show title (highlighted text) and/or contents (comment)
+    const isNote = annotation.annotation_type === "note"
+    const hasTitle = annotation.title && annotation.title.trim()
+    const hasContents = annotation.contents && annotation.contents.trim()
+
+    if (isNote && hasContents) {
       contentElement.textContent = annotation.contents
       contentElement.classList.remove("hidden")
-    } else if (annotation.title) {
-      contentElement.textContent = annotation.title
+    } else if (hasTitle || hasContents) {
+      // Build content with title and/or comment
+      let content = ""
+      if (hasTitle) {
+        content = annotation.title
+      }
+      if (hasContents) {
+        // Add comment on a new line if there's also a title
+        content += hasTitle ? `\n\nComment: ${annotation.contents}` : annotation.contents
+      }
+      contentElement.textContent = content
       contentElement.classList.remove("hidden")
     } else {
       contentElement.classList.add("hidden")

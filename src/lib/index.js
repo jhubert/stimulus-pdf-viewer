@@ -113,6 +113,7 @@ export class PdfViewer {
       onColorChange: this._onAnnotationColorChange.bind(this),
       onDelete: this._onAnnotationDelete.bind(this),
       onEdit: this._onAnnotationEdit.bind(this),
+      onComment: this._onAnnotationComment.bind(this),
       onDeselect: this._deselectAnnotation.bind(this)
     })
 
@@ -517,6 +518,14 @@ export class PdfViewer {
   _onAnnotationEdit(annotation) {
     // For notes, show the edit popup
     if (annotation.annotation_type === "note") {
+      this.tools[ToolMode.NOTE].editNote(annotation)
+    }
+  }
+
+  _onAnnotationComment(annotation) {
+    // For highlight/underline/ink, use the note tool's edit dialog to edit contents
+    const supportsComment = ["highlight", "line", "ink"].includes(annotation.annotation_type)
+    if (supportsComment) {
       this.tools[ToolMode.NOTE].editNote(annotation)
     }
   }

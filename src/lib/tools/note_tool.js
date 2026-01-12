@@ -177,12 +177,12 @@ export class NoteTool extends BaseTool {
     })
   }
 
-  // Method to edit an existing note
+  // Method to edit an existing note or add/edit a comment on other annotation types
   editNote(annotation) {
     // Store currently focused element for restoration on close
     this._previousFocusElement = document.activeElement
 
-    // Get the position of the note on screen
+    // Get the position of the annotation on screen
     const pageContainer = this.viewer.getPageContainer(annotation.page)
     if (!pageContainer) return
 
@@ -194,10 +194,20 @@ export class NoteTool extends BaseTool {
     // Store the annotation being edited
     this.editingAnnotation = annotation
 
-    this._showEditDialog(rect.left + x, rect.top + y, annotation.contents)
+    // Determine dialog title based on annotation type and whether contents exists
+    const isNote = annotation.annotation_type === "note"
+    const hasContents = annotation.contents && annotation.contents.trim()
+    let dialogTitle
+    if (isNote) {
+      dialogTitle = "Edit Note"
+    } else {
+      dialogTitle = hasContents ? "Edit Comment" : "Add Comment"
+    }
+
+    this._showEditDialog(rect.left + x, rect.top + y, annotation.contents, dialogTitle)
   }
 
-  _showEditDialog(x, y, existingText) {
+  _showEditDialog(x, y, existingText, title = "Edit Note") {
     // Remove any existing dialog (but keep editingAnnotation)
     this._removeDialog()
 
@@ -206,7 +216,7 @@ export class NoteTool extends BaseTool {
     this.noteDialog.className = "note-dialog"
     this.noteDialog.innerHTML = `
       <div class="note-dialog-header">
-        <span>Edit Note</span>
+        <span>${title}</span>
         <button class="note-dialog-close" aria-label="Close">
           ${Icons.close}
         </button>

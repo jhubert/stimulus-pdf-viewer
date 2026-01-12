@@ -6,6 +6,7 @@ export class AnnotationEditToolbar {
     this.onColorChange = options.onColorChange
     this.onDelete = options.onDelete
     this.onEdit = options.onEdit
+    this.onComment = options.onComment
     this.onDeselect = options.onDeselect
     this.colors = options.colors || ColorPicker.COLORS.map(c => c.value)
 
@@ -22,6 +23,9 @@ export class AnnotationEditToolbar {
     this.element.className = "annotation-edit-toolbar hidden"
     this.element.innerHTML = `
       <div class="toolbar-buttons">
+        <button class="toolbar-btn comment-btn hidden" title="Add Comment (C)">
+          ${Icons.comment}
+        </button>
         <button class="color-picker-btn" title="Change color" aria-haspopup="true" aria-expanded="false">
           <span class="color-swatch"></span>
           ${Icons.chevronDown}
@@ -41,11 +45,12 @@ export class AnnotationEditToolbar {
           ${Icons.delete}
         </button>
       </div>
-      <div class="toolbar-note-content hidden"></div>
+      <div class="toolbar-annotation-content hidden"></div>
     `
 
+    this.commentBtn = this.element.querySelector(".comment-btn")
     this.editBtn = this.element.querySelector(".edit-btn")
-    this.noteContent = this.element.querySelector(".toolbar-note-content")
+    this.annotationContent = this.element.querySelector(".toolbar-annotation-content")
   }
 
   _setupEventListeners() {
@@ -66,7 +71,15 @@ export class AnnotationEditToolbar {
       })
     })
 
-    // Edit button
+    // Comment button (for highlight/underline/ink annotations)
+    this.commentBtn.addEventListener("click", (e) => {
+      e.stopPropagation()
+      if (this.currentAnnotation && this.onComment) {
+        this.onComment(this.currentAnnotation)
+      }
+    })
+
+    // Edit button (for notes)
     this.editBtn.addEventListener("click", (e) => {
       e.stopPropagation()
       if (this.currentAnnotation && this.onEdit) {
@@ -118,6 +131,13 @@ export class AnnotationEditToolbar {
         if (this.currentAnnotation?.annotation_type === "note" && this.onEdit) {
           e.preventDefault()
           this.onEdit(this.currentAnnotation)
+        }
+      } else if (e.key === "c" || e.key === "C") {
+        // Comment shortcut for highlight/underline/ink annotations
+        const supportsComment = ["highlight", "line", "ink"].includes(this.currentAnnotation?.annotation_type)
+        if (supportsComment && this.onComment) {
+          e.preventDefault()
+          this.onComment(this.currentAnnotation)
         }
       }
     })
@@ -174,15 +194,26 @@ export class AnnotationEditToolbar {
     const color = annotation.color || ColorPicker.DEFAULT_HIGHLIGHT_COLOR
     this._updateSelectedColor(color)
 
-    // Show/hide edit button and note content based on annotation type
+    // Show/hide buttons based on annotation type
     const isNote = annotation.annotation_type === "note"
+    const supportsComment = ["highlight", "line", "ink"].includes(annotation.annotation_type)
+
+    // Comment button for highlight/underline/ink, edit button for notes
+    this.commentBtn.classList.toggle("hidden", !supportsComment)
     this.editBtn.classList.toggle("hidden", !isNote)
 
-    if (isNote && annotation.contents) {
-      this.noteContent.textContent = annotation.contents
-      this.noteContent.classList.remove("hidden")
+    // Update comment button title based on whether contents exists
+    if (supportsComment) {
+      const hasComment = annotation.contents && annotation.contents.trim()
+      this.commentBtn.title = hasComment ? "Edit Comment (C)" : "Add Comment (C)"
+    }
+
+    // Show contents for any annotation type that has it
+    if (annotation.contents) {
+      this.annotationContent.textContent = annotation.contents
+      this.annotationContent.classList.remove("hidden")
     } else {
-      this.noteContent.classList.add("hidden")
+      this.annotationContent.classList.add("hidden")
     }
 
     // Determine if toolbar should flip above the annotation
@@ -203,9 +234,9 @@ export class AnnotationEditToolbar {
     this.element.classList.add("hidden")
     this.currentAnnotation = null
 
-    // Clear note content
-    this.noteContent.textContent = ""
-    this.noteContent.classList.add("hidden")
+    // Clear annotation content
+    this.annotationContent.textContent = ""
+    this.annotationContent.classList.add("hidden")
 
     // Remove from parent when hidden
     if (this.element.parentNode) {

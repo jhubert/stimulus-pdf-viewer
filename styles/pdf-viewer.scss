@@ -939,17 +939,20 @@ html:has(.document-fullscreen) {
     padding: 2px;
   }
 
-  .toolbar-note-content {
+  .toolbar-annotation-content {
     min-width: 200px;
     max-width: 320px;
-    padding: 8px 12px;
-    border-top: 1px solid var(--toolbar-border);
-    font-size: 13px;
+    margin: 4px;
+    margin-top: 0;
+    padding: 8px 10px;
+    background: white;
+    border-radius: 4px;
+    font-size: 14px;
     line-height: 1.4;
     color: var(--toolbar-fg);
     white-space: pre-wrap;
     word-break: break-word;
-    max-height: 120px;
+    max-height: 100px;
     overflow-y: auto;
   }
 
