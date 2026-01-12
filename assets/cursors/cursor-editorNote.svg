@@ -1,8 +1,0 @@
-<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-<!-- White outline/shadow -->
-<path d="M2 1C1.44772 1 1 1.44772 1 2V11C1 11.5523 1.44772 12 2 12H5L8 15L11 12H14C14.5523 12 15 11.5523 15 11V2C15 1.44772 14.5523 1 14 1H2Z" fill="white" stroke="white" stroke-width="1"/>
-<!-- Black icon -->
-<path d="M2 2H14V11H10.5L8 13.5L5.5 11H2V2Z" fill="black"/>
-<!-- Inner detail - folded corner or lines -->
-<path d="M4 5H12M4 7.5H10" stroke="white" stroke-width="1" stroke-linecap="round"/>
-</svg>
