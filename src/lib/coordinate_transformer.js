@@ -110,15 +110,25 @@ export class CoordinateTransformer {
         for (let i = 0; i < result.length; i++) {
           const existing = result[i]
 
-          // Check if rects overlap (share vertical AND horizontal space)
-          const verticalOverlap = rect.top < existing.bottom && rect.bottom > existing.top
+          // Calculate vertical overlap amount
+          const overlapTop = Math.max(rect.top, existing.top)
+          const overlapBottom = Math.min(rect.bottom, existing.bottom)
+          const overlapHeight = Math.max(0, overlapBottom - overlapTop)
+
+          // Require significant vertical overlap (at least 50% of smaller rect's height)
+          // This prevents merging rects from different lines that only slightly overlap
+          const rectHeight = rect.bottom - rect.top
+          const existingHeight = existing.bottom - existing.top
+          const minHeight = Math.min(rectHeight, existingHeight)
+          const significantVerticalOverlap = overlapHeight > minHeight * 0.5
+
           const horizontalOverlap = rect.left < existing.right && rect.right > existing.left
 
           // Also merge if they're adjacent horizontally on same line
           const sameLine = Math.abs(rect.top - existing.top) < 3 && Math.abs(rect.bottom - existing.bottom) < 3
           const horizontallyAdjacent = Math.abs(rect.left - existing.right) < 2 || Math.abs(existing.left - rect.right) < 2
 
-          if ((verticalOverlap && horizontalOverlap) || (sameLine && horizontallyAdjacent)) {
+          if ((significantVerticalOverlap && horizontalOverlap) || (sameLine && horizontallyAdjacent)) {
             // Merge: extend existing rect to encompass both
             result[i] = {
               left: Math.min(existing.left, rect.left),
