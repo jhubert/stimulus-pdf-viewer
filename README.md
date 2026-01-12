@@ -2,6 +2,8 @@
 
 A full-featured PDF viewer with annotation support, built for [Stimulus](https://stimulus.hotwired.dev/) and the [Hotwire](https://hotwired.dev/) ecosystem.
 
+<img width="1133" height="831" alt="pdf-viewer-screenshot1" src="https://github.com/user-attachments/assets/fe75b538-412f-4700-a6cc-76a1077e4b34" />
+
 ## Features
 
 - **PDF Rendering** - Powered by Mozilla's PDF.js with lazy page loading
@@ -197,7 +199,9 @@ const viewer = new PdfViewer(container, {
 
 ## Rails Integration
 
-See `examples/rails/` for complete Rails integration examples including:
+For the easiest Rails setup, use the [stimulus-pdf-viewer-rails](https://github.com/jhubert/stimulus-pdf-viewer-rails) gem which handles asset configuration automatically.
+
+For manual integration, see `examples/rails/` for complete Rails integration examples including:
 
 - View partials for the viewer and toolbar
 - Annotations controller
