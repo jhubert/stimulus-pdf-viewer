@@ -14,7 +14,8 @@ export default class extends Controller {
     documentId: String,
     trackingUrl: String,
     initialPage: Number,
-    initialAnnotation: String
+    initialAnnotation: String,
+    autoHeight: { type: Boolean, default: true }
   }
 
   initialize() {
@@ -480,8 +481,8 @@ export default class extends Controller {
 
   setViewportHeight() {
     requestAnimationFrame(() => {
-      // Skip if using CSS flexbox layout (document-fullscreen wrapper handles sizing)
-      if (this.containerTarget.closest('.document-fullscreen')) {
+      // Skip if autoHeight is disabled (container height managed by consuming application)
+      if (!this.autoHeightValue) {
         return
       }
 
