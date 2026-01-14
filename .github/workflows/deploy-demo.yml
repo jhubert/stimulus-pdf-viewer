@@ -1,0 +1,54 @@
+name: Deploy Demo to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run build:css
+
+      - name: Prepare demo site
+        run: |
+          mkdir -p _site/dist
+          cp dev/index.html _site/
+          cp dev/styles.css _site/
+          cp dist/stimulus-pdf-viewer.esm.js _site/dist/
+          # Fix the import path for deployment
+          sed -i 's|"../dist/|"./dist/|g' _site/index.html
+          # Update title
+          sed -i 's|PDF Viewer Development|stimulus-pdf-viewer Demo|g' _site/index.html
+
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
