@@ -2,7 +2,9 @@
 
 A full-featured PDF viewer with annotation support, built for [Stimulus](https://stimulus.hotwired.dev/) and the [Hotwire](https://hotwired.dev/) ecosystem.
 
-<img width="1133" height="831" alt="pdf-viewer-screenshot1" src="https://github.com/user-attachments/assets/fe75b538-412f-4700-a6cc-76a1077e4b34" />
+**[Try the live demo](https://jhubert.github.io/stimulus-pdf-viewer/)**
+
+<img width="1133" height="831" alt="stimulus-pdf-viewer screenshot" src="https://raw.githubusercontent.com/jhubert/stimulus-pdf-viewer/main/screenshot.png" />
 
 ## Features
 
