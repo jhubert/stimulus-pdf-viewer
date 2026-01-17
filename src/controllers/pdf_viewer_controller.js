@@ -36,7 +36,9 @@ export default class extends Controller {
       userName: this.userNameValue,
       documentId: this.documentIdValue,
       initialPage: this.initialPageValue || 1,
-      initialAnnotation: this.initialAnnotationValue
+      initialAnnotation: this.initialAnnotationValue,
+      onCopy: (e) => this._dispatchClipboardEvent("copy", e),
+      onCut: (e) => this._dispatchClipboardEvent("cut", e)
     })
 
     // Set up the toolbar
@@ -491,6 +493,18 @@ export default class extends Controller {
       this.containerTarget.style.overflow = "hidden"
       this.containerTarget.style.height = `${window.innerHeight - rect.top}px`
     })
+  }
+
+  /**
+   * Dispatch clipboard events (copy/cut) as custom events for Stimulus actions.
+   * @param {string} type - "copy" or "cut"
+   * @param {ClipboardEvent} event - The original clipboard event
+   */
+  _dispatchClipboardEvent(type, event) {
+    this.containerTarget.dispatchEvent(new CustomEvent(`pdf-viewer:${type}`, {
+      bubbles: true,
+      detail: { originalEvent: event }
+    }))
   }
 
   /**
