@@ -42,6 +42,8 @@ export class PdfViewer {
     this.documentId = options.documentId
     this.initialPage = options.initialPage || 1
     this.initialAnnotation = options.initialAnnotation
+    this.onCopy = options.onCopy || null
+    this.onCut = options.onCut || null
 
     this.currentTool = null
     this.currentMode = ToolMode.SELECT
@@ -78,7 +80,9 @@ export class PdfViewer {
 
     // Core viewer (PDF.js wrapper with lazy rendering and events)
     this.viewer = new CoreViewer(this.pagesContainer, {
-      initialScale: 1.0
+      initialScale: 1.0,
+      onCopy: this.onCopy,
+      onCut: this.onCut
     })
 
     // Subscribe to core viewer events

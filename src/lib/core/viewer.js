@@ -34,6 +34,8 @@ export class CoreViewer {
   constructor(container, options = {}) {
     this.container = container
     this.eventBus = options.eventBus || new EventBus()
+    this.onCopy = options.onCopy || null
+    this.onCut = options.onCut || null
 
     // PDF.js document reference
     this.pdfDocument = null
@@ -73,6 +75,14 @@ export class CoreViewer {
     // Text layer selection tracking (for multi-page selection)
     this._textLayers = new Map()
     this._setupGlobalSelectionListener()
+
+    // Copy/cut event hooks
+    if (this.onCopy) {
+      this.container.addEventListener("copy", (e) => this.onCopy(e))
+    }
+    if (this.onCut) {
+      this.container.addEventListener("cut", (e) => this.onCut(e))
+    }
   }
 
   /**
