@@ -260,6 +260,10 @@ export class PdfViewer {
       if (e.target.closest(".annotation") || e.target.closest(".annotation-edit-toolbar")) {
         return
       }
+      // Skip if an annotation was just created (click follows pointerup from text selection)
+      if (this._suppressClickDeselect) {
+        return
+      }
       this._deselectAnnotation()
     })
 
@@ -442,10 +446,14 @@ export class PdfViewer {
 
     // Auto-select the newly created annotation
     const pageContainer = this.viewer.getPageContainer(annotation.page)
-    const element = pageContainer?.querySelector(`[data-annotation-id="${annotation.id}"]`)
+    const element = pageContainer?.querySelector(`.annotation[data-annotation-id="${annotation.id}"]`)
     if (element) {
       this._selectAnnotation(annotation, element)
     }
+
+    // Suppress the click-to-deselect that follows pointerup after text selection
+    this._suppressClickDeselect = true
+    setTimeout(() => { this._suppressClickDeselect = false }, 100)
 
     // Notify annotation sidebar
     this.annotationSidebar?.onAnnotationCreated(annotation)
@@ -474,7 +482,7 @@ export class PdfViewer {
     // Re-select the annotation after re-render
     if (wasSelected) {
       const pageContainer = this.viewer.getPageContainer(annotation.page)
-      const element = pageContainer?.querySelector(`[data-annotation-id="${annotation.id}"]`)
+      const element = pageContainer?.querySelector(`.annotation[data-annotation-id="${annotation.id}"]`)
       if (element) {
         // Get the fresh annotation data from the manager
         const updatedAnnotation = this.annotationManager.getAnnotation(annotation.id)
