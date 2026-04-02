@@ -309,6 +309,12 @@ export class PdfViewer {
       // Render annotations on all rendered pages
       this._renderAnnotations()
 
+      const annotations = this.annotationManager.getAllAnnotations()
+      this.container.dispatchEvent(new CustomEvent("pdf-viewer:annotations-loaded", {
+        bubbles: true,
+        detail: { annotations, count: annotations.length }
+      }))
+
       // Navigate to initial page if specified
       if (this.initialPage > 1) {
         this.viewer.goToPage(this.initialPage)
@@ -489,6 +495,11 @@ export class PdfViewer {
     // Announce to screen readers
     const typeLabel = this._getAnnotationTypeLabel(annotation.annotation_type)
     getAnnouncer().announce(`${typeLabel} updated`)
+
+    this.container.dispatchEvent(new CustomEvent("pdf-viewer:annotation-updated", {
+      bubbles: true,
+      detail: { annotation }
+    }))
   }
 
   _onAnnotationDeleted(annotation) {
@@ -1143,6 +1154,8 @@ export class PdfViewer {
   }
 
   _deselectAnnotation() {
+    const previousAnnotation = this.selectedAnnotation
+
     if (this.selectedAnnotationElement) {
       this.selectedAnnotationElement.classList.remove("selected")
     }
@@ -1151,6 +1164,13 @@ export class PdfViewer {
 
     // Hide the edit toolbar
     this.annotationEditToolbar.hide()
+
+    if (previousAnnotation) {
+      this.container.dispatchEvent(new CustomEvent("pdf-viewer:annotation-deselected", {
+        bubbles: true,
+        detail: { annotationId: previousAnnotation.id }
+      }))
+    }
   }
 
   async _onAnnotationColorChange(annotation, color) {

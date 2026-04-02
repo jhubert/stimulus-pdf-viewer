@@ -313,6 +313,17 @@ export class AnnotationSidebar {
         this.listContainer.appendChild(item)
       }
     }
+
+    // Re-fire selected event after rebuild so consumers can re-attach detail panels
+    if (this.selectedAnnotationId) {
+      const annotation = this.annotationManager.getAnnotation(this.selectedAnnotationId)
+      if (annotation) {
+        this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-selected", {
+          bubbles: true,
+          detail: { annotationId: this.selectedAnnotationId, annotation }
+        }))
+      }
+    }
   }
 
   _matchesFilter(annotation) {
@@ -535,10 +546,22 @@ export class AnnotationSidebar {
   }
 
   _selectItem(annotationId) {
+    const previousId = this.selectedAnnotationId
+
+    // Skip if already selected
+    if (previousId === annotationId) return
+
     // Deselect previous
     const prev = this.listContainer.querySelector(".annotation-list-item.selected")
     if (prev) {
       prev.classList.remove("selected")
+    }
+
+    if (previousId) {
+      this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-deselected", {
+        bubbles: true,
+        detail: { annotationId: previousId }
+      }))
     }
 
     // Select new
@@ -547,6 +570,12 @@ export class AnnotationSidebar {
     if (item) {
       item.classList.add("selected")
     }
+
+    const annotation = this.annotationManager.getAnnotation(annotationId)
+    this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-selected", {
+      bubbles: true,
+      detail: { annotationId, annotation }
+    }))
   }
 
   /**
@@ -574,7 +603,12 @@ export class AnnotationSidebar {
     if (this.isOpen) {
       // Clear selection if deleted annotation was selected
       if (this.selectedAnnotationId === annotation.id) {
+        const previousId = this.selectedAnnotationId
         this.selectedAnnotationId = null
+        this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-deselected", {
+          bubbles: true,
+          detail: { annotationId: previousId }
+        }))
       }
       this._refreshList()
     }
@@ -602,6 +636,10 @@ export class AnnotationSidebar {
     this.element.classList.add("open")
     this.container.classList.add("annotation-sidebar-open")
     this._refreshList()
+
+    this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-sidebar-opened", {
+      bubbles: true
+    }))
   }
 
   /**
@@ -611,6 +649,10 @@ export class AnnotationSidebar {
     this.isOpen = false
     this.element.classList.remove("open")
     this.container.classList.remove("annotation-sidebar-open")
+
+    this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-sidebar-closed", {
+      bubbles: true
+    }))
   }
 
   /**

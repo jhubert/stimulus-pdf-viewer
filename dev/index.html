@@ -268,6 +268,32 @@
       }
     })
 
+    // Log all pdf-viewer and pdf-sidebar events to console
+    const viewerContainer = document.querySelector('.pdf-viewer-container')
+    const eventNames = [
+      'pdf-viewer:ready',
+      'pdf-viewer:page-changed',
+      'pdf-viewer:scale-changed',
+      'pdf-viewer:mode-changed',
+      'pdf-viewer:annotation-created',
+      'pdf-viewer:annotation-updated',
+      'pdf-viewer:annotation-deleted',
+      'pdf-viewer:annotation-selected',
+      'pdf-viewer:annotation-deselected',
+      'pdf-viewer:annotations-loaded',
+      'pdf-viewer:error',
+      'pdf-viewer:user-error',
+      'pdf-sidebar:annotation-selected',
+      'pdf-sidebar:annotation-deselected',
+      'pdf-sidebar:annotation-sidebar-opened',
+      'pdf-sidebar:annotation-sidebar-closed',
+    ]
+    for (const name of eventNames) {
+      viewerContainer.addEventListener(name, (e) => {
+        console.log(`%c${name}`, 'color: #7c3aed; font-weight: bold', e.detail || '')
+      })
+    }
+
     // Load Mozilla's sample PDF (has proper CORS headers)
     const samplePdfUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf'
     const container = document.querySelector('[data-controller="pdf-viewer"]')
