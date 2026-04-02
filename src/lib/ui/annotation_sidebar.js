@@ -546,14 +546,18 @@ export class AnnotationSidebar {
   }
 
   _selectItem(annotationId) {
-    // Deselect previous
     const previousId = this.selectedAnnotationId
+
+    // Skip if already selected
+    if (previousId === annotationId) return
+
+    // Deselect previous
     const prev = this.listContainer.querySelector(".annotation-list-item.selected")
     if (prev) {
       prev.classList.remove("selected")
     }
 
-    if (previousId && previousId !== annotationId) {
+    if (previousId) {
       this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-deselected", {
         bubbles: true,
         detail: { annotationId: previousId }

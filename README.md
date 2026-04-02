@@ -178,12 +178,20 @@ The viewer dispatches these custom events on the container element:
 |-------|-------------|
 | `pdf-viewer:ready` | Document loaded and ready |
 | `pdf-viewer:page-changed` | User navigated to a different page |
+| `pdf-viewer:annotations-loaded` | Annotations fetched and rendered after document load |
 | `pdf-viewer:annotation-created` | New annotation created |
 | `pdf-viewer:annotation-updated` | Annotation modified |
 | `pdf-viewer:annotation-deleted` | Annotation deleted |
 | `pdf-viewer:annotation-selected` | User selected an annotation |
+| `pdf-viewer:annotation-deselected` | Annotation deselected |
 | `pdf-viewer:scale-changed` | Zoom level changed |
+| `pdf-viewer:mode-changed` | Tool mode switched |
 | `pdf-viewer:error` | Error occurred |
+| `pdf-viewer:user-error` | User-facing error occurred |
+| `pdf-sidebar:annotation-selected` | Annotation selected in sidebar |
+| `pdf-sidebar:annotation-deselected` | Annotation deselected in sidebar |
+| `pdf-sidebar:annotation-sidebar-opened` | Annotation sidebar opened |
+| `pdf-sidebar:annotation-sidebar-closed` | Annotation sidebar closed |
 
 ## Error Handling
 
