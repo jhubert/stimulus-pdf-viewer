@@ -69,7 +69,11 @@ export class AnnotationDetailPanel {
   }
 
   _setupEventListeners() {
-    // Prevent clicks inside the panel from deselecting the annotation
+    // Prevent pointer/click events inside the panel from triggering annotation tools
+    // Tools listen on pointerdown on the pages container, so we must stop all phases
+    this.element.addEventListener("pointerdown", (e) => {
+      e.stopPropagation()
+    })
     this.element.addEventListener("click", (e) => {
       e.stopPropagation()
     })

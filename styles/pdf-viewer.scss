@@ -900,7 +900,6 @@
   box-shadow: var(--panel-shadow);
   pointer-events: auto;
   cursor: default;
-  overflow: hidden;
 
   .annotation-detail-header {
     display: flex;
@@ -928,6 +927,7 @@
   }
 
   .annotation-detail-header-actions {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0;
