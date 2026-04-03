@@ -10,6 +10,7 @@ A full-featured PDF viewer with annotation support, built for [Stimulus](https:/
 
 - **PDF Rendering** - Powered by Mozilla's PDF.js with lazy page loading
 - **Annotations** - Highlights, underlines, sticky notes, and freehand drawing
+- **Detail Panel** - Anchored panel for viewing and editing annotation details (opt-in)
 - **Search** - Find text within the document with keyboard shortcuts
 - **Thumbnails** - Page thumbnail sidebar for quick navigation
 - **Zoom Controls** - Fit to page, fit to width, or custom zoom levels
@@ -140,6 +141,7 @@ The `PdfViewerController` accepts the following Stimulus values:
 | `organizationName` | String | Organization name for watermarks |
 | `initialPage` | Number | Page to open on load (default: 1) |
 | `initialAnnotation` | String | Annotation ID to highlight on load |
+| `detailPanel` | Boolean | Enable the anchored detail panel for annotations (default: false) |
 
 ## Annotations API
 
@@ -184,6 +186,8 @@ The viewer dispatches these custom events on the container element:
 | `pdf-viewer:annotation-deleted` | Annotation deleted |
 | `pdf-viewer:annotation-selected` | User selected an annotation |
 | `pdf-viewer:annotation-deselected` | Annotation deselected |
+| `pdf-viewer:detail-panel-opened` | Detail panel opened for an annotation |
+| `pdf-viewer:detail-panel-closed` | Detail panel closed |
 | `pdf-viewer:scale-changed` | Zoom level changed |
 | `pdf-viewer:mode-changed` | Tool mode switched |
 | `pdf-viewer:error` | Error occurred |
