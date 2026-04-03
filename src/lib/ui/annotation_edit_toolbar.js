@@ -105,12 +105,12 @@ export class AnnotationEditToolbar {
     })
 
     // Handle keyboard shortcuts
-    document.addEventListener("keydown", (e) => {
+    this._keydownHandler = (e) => {
       if (this.element.classList.contains("hidden")) return
 
       // Don't intercept if user is typing
       const activeEl = document.activeElement
-      if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) return
+      if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.isContentEditable)) return
 
       if (e.key === "Escape") {
         if (this.colorDropdownOpen) {
@@ -140,7 +140,8 @@ export class AnnotationEditToolbar {
           this.onComment(this.currentAnnotation)
         }
       }
-    })
+    }
+    document.addEventListener("keydown", this._keydownHandler)
   }
 
   _toggleColorDropdown() {
@@ -249,6 +250,9 @@ export class AnnotationEditToolbar {
   }
 
   destroy() {
+    if (this._keydownHandler) {
+      document.removeEventListener("keydown", this._keydownHandler)
+    }
     this.element.remove()
   }
 }

@@ -15,7 +15,8 @@ export default class extends Controller {
     trackingUrl: String,
     initialPage: Number,
     initialAnnotation: String,
-    autoHeight: { type: Boolean, default: true }
+    autoHeight: { type: Boolean, default: true },
+    detailPanel: { type: Boolean, default: false }
   }
 
   initialize() {
@@ -36,7 +37,8 @@ export default class extends Controller {
       userName: this.userNameValue,
       documentId: this.documentIdValue,
       initialPage: this.initialPageValue || 1,
-      initialAnnotation: this.initialAnnotationValue
+      initialAnnotation: this.initialAnnotationValue,
+      detailPanel: this.detailPanelValue
     })
 
     // Set up the toolbar

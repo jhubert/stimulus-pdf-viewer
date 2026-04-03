@@ -3,6 +3,7 @@ import { AnnotationManager } from "./annotation_manager"
 import { Watermark } from "./watermark"
 import { DownloadManager } from "./download_manager"
 import { AnnotationEditToolbar } from "./ui/annotation_edit_toolbar"
+import { AnnotationDetailPanel } from "./ui/annotation_detail_panel"
 import { UndoBar } from "./ui/undo_bar"
 import { ColorPicker } from "./ui/color_picker"
 import { ThumbnailSidebar } from "./ui/thumbnail_sidebar"
@@ -116,6 +117,18 @@ export class PdfViewer {
       onComment: this._onAnnotationComment.bind(this),
       onDeselect: this._deselectAnnotation.bind(this)
     })
+
+    // Detail panel (opt-in: replaces edit toolbar when enabled)
+    if (this.options.detailPanel && this.bodyContainer) {
+      this.annotationDetailPanel = new AnnotationDetailPanel({
+        container: this.bodyContainer,
+        onColorChange: this._onAnnotationColorChange.bind(this),
+        onDelete: this._onAnnotationDelete.bind(this),
+        onEdit: this._onAnnotationEdit.bind(this),
+        onComment: this._onAnnotationComment.bind(this),
+        onClose: this._deselectAnnotation.bind(this)
+      })
+    }
 
     this.undoBar = new UndoBar(this.undoBarContainer, {
       onUndo: this._onAnnotationUndo.bind(this)
@@ -256,8 +269,8 @@ export class PdfViewer {
 
     // Deselect annotation when clicking outside
     this.pagesContainer.addEventListener("click", (e) => {
-      // Don't deselect if clicking on an annotation or the edit toolbar
-      if (e.target.closest(".annotation") || e.target.closest(".annotation-edit-toolbar")) {
+      // Don't deselect if clicking on an annotation, edit toolbar, or detail panel
+      if (e.target.closest(".annotation") || e.target.closest(".annotation-edit-toolbar") || e.target.closest(".annotation-detail-panel")) {
         return
       }
       // Skip if an annotation was just created (click follows pointerup from text selection)
@@ -472,9 +485,9 @@ export class PdfViewer {
     // Remember if this annotation was selected
     const wasSelected = this.selectedAnnotation && this.selectedAnnotation.id === annotation.id
 
-    // Hide toolbar before re-render (it will be re-shown after)
+    // Hide annotation UI before re-render (it will be re-shown after)
     if (wasSelected) {
-      this.annotationEditToolbar.hide()
+      this._hideAnnotationUI()
     }
 
     this._renderAnnotationsForPage(annotation.page, this.viewer.getPageContainer(annotation.page))
@@ -492,7 +505,7 @@ export class PdfViewer {
           this.selectedAnnotation = updatedAnnotation
           this.selectedAnnotationElement = element
           element.classList.add("selected")
-          this.annotationEditToolbar.show(updatedAnnotation, element)
+          this._showAnnotationUI(updatedAnnotation, element)
         }
       }
     }
@@ -1139,7 +1152,7 @@ export class PdfViewer {
       if (this.selectedAnnotationElement !== element) {
         this.selectedAnnotationElement = element
         element.classList.add("selected")
-        this.annotationEditToolbar.show(annotation, element, pageHeight)
+        this._showAnnotationUI(annotation, element, pageHeight)
       }
       return
     }
@@ -1152,13 +1165,40 @@ export class PdfViewer {
     this.selectedAnnotationElement = element
     element.classList.add("selected")
 
-    // Show the edit toolbar below the annotation (includes note content for notes)
-    this.annotationEditToolbar.show(annotation, element, pageHeight)
+    // Show the appropriate annotation UI
+    this._showAnnotationUI(annotation, element, pageHeight)
 
     this.container.dispatchEvent(new CustomEvent("pdf-viewer:annotation-selected", {
       bubbles: true,
       detail: { annotation }
     }))
+  }
+
+  _showAnnotationUI(annotation, element, pageHeight) {
+    if (this.annotationDetailPanel) {
+      this.annotationDetailPanel.show(annotation, element)
+      this.container.dispatchEvent(new CustomEvent("pdf-viewer:detail-panel-opened", {
+        bubbles: true,
+        detail: { annotation, element }
+      }))
+    } else {
+      this.annotationEditToolbar.show(annotation, element, pageHeight)
+    }
+  }
+
+  _hideAnnotationUI() {
+    if (this.annotationDetailPanel) {
+      const annotation = this.annotationDetailPanel.currentAnnotation
+      this.annotationDetailPanel.hide()
+      if (annotation) {
+        this.container.dispatchEvent(new CustomEvent("pdf-viewer:detail-panel-closed", {
+          bubbles: true,
+          detail: { annotation, annotationId: annotation.id }
+        }))
+      }
+    } else {
+      this.annotationEditToolbar.hide()
+    }
   }
 
   _deselectAnnotation() {
@@ -1170,8 +1210,8 @@ export class PdfViewer {
     this.selectedAnnotation = null
     this.selectedAnnotationElement = null
 
-    // Hide the edit toolbar
-    this.annotationEditToolbar.hide()
+    // Hide the annotation UI (detail panel or edit toolbar)
+    this._hideAnnotationUI()
 
     if (previousAnnotation) {
       this.container.dispatchEvent(new CustomEvent("pdf-viewer:annotation-deselected", {
@@ -1346,6 +1386,7 @@ export class PdfViewer {
 
     this.viewer.destroy()
     this.annotationEditToolbar.destroy()
+    this.annotationDetailPanel?.destroy()
     this.undoBar.destroy()
     this.thumbnailSidebar?.destroy()
     this.annotationSidebar?.destroy()
