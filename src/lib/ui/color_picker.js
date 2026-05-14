@@ -74,11 +74,12 @@ export class ColorPicker {
     })
 
     // Close on outside click
-    document.addEventListener("click", () => {
+    this._documentClickHandler = () => {
       if (this.isOpen) {
         this._closeDropdown()
       }
-    })
+    }
+    document.addEventListener("click", this._documentClickHandler)
   }
 
   _closeDropdown() {
@@ -110,5 +111,14 @@ export class ColorPicker {
 
   getColor() {
     return this.currentColor
+  }
+
+  destroy() {
+    if (this._documentClickHandler) {
+      document.removeEventListener("click", this._documentClickHandler)
+      this._documentClickHandler = null
+    }
+    this.element?.remove()
+    this.element = null
   }
 }

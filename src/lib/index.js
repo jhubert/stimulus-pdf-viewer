@@ -1392,6 +1392,7 @@ export class PdfViewer {
     this.annotationSidebar?.destroy()
     this.findController?.destroy()
     this.findBar?.destroy()
+    this.colorPicker?.destroy()
 
     Object.values(this.tools).forEach(tool => tool.destroy?.())
 
