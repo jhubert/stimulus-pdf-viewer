@@ -16,7 +16,8 @@ export default class extends Controller {
     initialPage: Number,
     initialAnnotation: String,
     autoHeight: { type: Boolean, default: true },
-    detailPanel: { type: Boolean, default: false }
+    detailPanel: { type: Boolean, default: false },
+    errorMessage: String
   }
 
   initialize() {
@@ -52,8 +53,25 @@ export default class extends Controller {
       await this.pdfViewer.load()
     } catch (error) {
       console.error("Failed to load PDF:", error)
-      this._showError("Failed to load PDF document")
+      this._handleLoadFailure(error)
     }
+  }
+
+  // Surface a final load failure: hide the spinner, show a host-customizable
+  // message, and dispatch a DOM event so the host app can wire telemetry.
+  _handleLoadFailure(error) {
+    if (this.hasLoadingOverlayTarget) {
+      this.loadingOverlayTarget.classList.add("hidden")
+    }
+    const message = this.errorMessageValue || "Failed to load PDF document"
+    this._showError(message)
+    this.containerTarget.dispatchEvent(new CustomEvent("pdf-viewer:load-failed", {
+      bubbles: true,
+      detail: {
+        message: String(error?.message || error || ""),
+        name: String(error?.name || "")
+      }
+    }))
   }
 
   _setupErrorListener() {
