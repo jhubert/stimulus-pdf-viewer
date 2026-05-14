@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.2] - 2026-05-13
+
+### Added
+- Full-fetch fallback when PDF.js's range-streamed load fails. Some corporate antivirus / web-filter products block streamed reads while allowing plain GETs; the viewer now retries once with an ArrayBuffer fetch.
+- `errorMessage` controller value so host apps can supply context-aware, i18n'd copy for the failure state.
+- `pdf-viewer:load-failed` DOM event dispatched after the fallback also fails, for host-app error telemetry.
+
+### Fixed
+- Loading overlay was left spinning behind the error text when document load failed. The overlay is now hidden when the error message appears.
+- Duplicate color pickers in the toolbar after disconnecting and reconnecting the controller (e.g. when swapping the loaded PDF). `PdfViewer.destroy()` now tears down the color picker element and its document-level click listener.
+
 ## [0.3.1] - 2026-04-03
 
 ### Added
