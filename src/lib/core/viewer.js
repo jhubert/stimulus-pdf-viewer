@@ -161,13 +161,28 @@ export class CoreViewer {
   }
 
   /**
+   * Total rotation to render a page at: the page's intrinsic /Rotate value
+   * combined with any user-applied viewer rotation.
+   *
+   * PDF.js treats the `rotation` option passed to getViewport() as absolute,
+   * so we must add page.rotate ourselves — otherwise pages that rely on
+   * /Rotate (e.g. landscape scans stored as portrait + /Rotate 90) render
+   * sideways.
+   * @param {Object} page - PDF.js page proxy
+   * @returns {number} rotation in degrees, normalized to 0-359
+   */
+  _rotationFor(page) {
+    return (((this.rotation + (page.rotate || 0)) % 360) + 360) % 360
+  }
+
+  /**
    * Create placeholder containers for all pages with correct dimensions.
    * Pages are rendered lazily when they become visible.
    */
   async _createPagePlaceholders() {
     // Get first page to determine default dimensions
     const firstPage = await this.pdfDocument.getPage(1)
-    const defaultViewport = firstPage.getViewport({ scale: 1.0, rotation: this.rotation })
+    const defaultViewport = firstPage.getViewport({ scale: 1.0, rotation: this._rotationFor(firstPage) })
 
     // Create all placeholders immediately with default dimensions
     // Actual dimensions will be set when each page is rendered
@@ -232,7 +247,7 @@ export class CoreViewer {
 
       if (!page) {
         page = await this.pdfDocument.getPage(pageNumber)
-        unitViewport = page.getViewport({ scale: 1.0, rotation: this.rotation })
+        unitViewport = page.getViewport({ scale: 1.0, rotation: this._rotationFor(page) })
         pageData.page = page
         pageData.unitViewport = unitViewport
 
@@ -250,7 +265,7 @@ export class CoreViewer {
       const displayScale = this.displayScale
 
       // Get viewport at display scale (what we want to show on screen)
-      const displayViewport = page.getViewport({ scale: displayScale, rotation: this.rotation })
+      const displayViewport = page.getViewport({ scale: displayScale, rotation: this._rotationFor(page) })
 
       // Create canvas for PDF rendering
       const canvas = document.createElement("canvas")
