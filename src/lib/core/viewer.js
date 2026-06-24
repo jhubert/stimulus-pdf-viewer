@@ -37,6 +37,7 @@ export class CoreViewer {
 
     // PDF.js document reference
     this.pdfDocument = null
+    this._loadingTask = null
     this.pageCount = 0
 
     // Page data storage: pageNumber -> PageData
@@ -59,9 +60,17 @@ export class CoreViewer {
     this._renderingQueue = new RenderingQueue()
     this._renderingQueue.setViewer(this)
 
+    // Single AbortController for every DOM/document/window listener this viewer
+    // adds, so destroy() can remove them all at once. Several of these live on
+    // the global document/window and would otherwise outlive the viewer,
+    // pinning it (and its PDF document) in memory on every reconnect.
+    this._abortController = new AbortController()
+
     // Scroll handling
     this._scrollHandler = this._onScroll.bind(this)
-    this.container.addEventListener("scroll", this._scrollHandler)
+    this.container.addEventListener("scroll", this._scrollHandler, {
+      signal: this._abortController.signal
+    })
 
     // Resize handling
     this._resizeObserver = new ResizeObserver(() => this._onResize())
@@ -118,13 +127,15 @@ export class CoreViewer {
    * @returns {Promise<PDFDocumentProxy>}
    */
   async _loadDocument(source) {
-    const loadingTask = pdfjsLib.getDocument(source)
-    this.pdfDocument = await loadingTask.promise
-    this.pageCount = this.pdfDocument.numPages
+    // Release any previously-loaded document (and its in-flight loading task)
+    // before starting a new one, so reloading a different PDF — or the blob
+    // fallback retry in load() — doesn't orphan a whole PDF.js document and its
+    // worker-side resources.
+    await this._teardownDocument()
 
-    // Clear any existing content
-    this.container.innerHTML = ""
-    this.pages.clear()
+    this._loadingTask = pdfjsLib.getDocument(source)
+    this.pdfDocument = await this._loadingTask.promise
+    this.pageCount = this.pdfDocument.numPages
 
     // Set initial display scale on container
     this.container.style.setProperty("--display-scale", String(this.displayScale))
@@ -293,6 +304,9 @@ export class CoreViewer {
 
       // Create or update text layer
       if (pageData.textLayer) {
+        // Drop the stale entry so the selection map doesn't retain detached
+        // text-layer nodes across re-renders (zoom, reload).
+        this._textLayers.delete(pageData.textLayer)
         pageData.textLayer.remove()
       }
 
@@ -567,6 +581,8 @@ export class CoreViewer {
       return Math.sqrt(dx * dx + dy * dy)
     }
 
+    const signal = this._abortController.signal
+
     this.container.addEventListener("touchstart", (e) => {
       if (e.touches.length === 2) {
         isPinching = true
@@ -575,7 +591,7 @@ export class CoreViewer {
         // Prevent default to stop page scrolling during pinch
         e.preventDefault()
       }
-    }, { passive: false })
+    }, { passive: false, signal })
 
     this.container.addEventListener("touchmove", (e) => {
       if (!isPinching || e.touches.length !== 2) return
@@ -595,17 +611,17 @@ export class CoreViewer {
       if (Math.abs(newScale - this.displayScale) > 0.01) {
         this.setScale(newScale)
       }
-    }, { passive: false })
+    }, { passive: false, signal })
 
     this.container.addEventListener("touchend", (e) => {
       if (e.touches.length < 2) {
         isPinching = false
       }
-    })
+    }, { signal })
 
     this.container.addEventListener("touchcancel", () => {
       isPinching = false
-    })
+    }, { signal })
   }
 
   // ===== Navigation Methods =====
@@ -782,14 +798,16 @@ export class CoreViewer {
   _bindTextLayerSelection(textLayerDiv, endOfContent) {
     this._textLayers.set(textLayerDiv, endOfContent)
 
+    const signal = this._abortController.signal
+
     textLayerDiv.addEventListener("mousedown", () => {
       textLayerDiv.classList.add("selecting")
-    })
+    }, { signal })
 
     // Touch events for iOS selection handling
     textLayerDiv.addEventListener("touchstart", () => {
       textLayerDiv.classList.add("selecting")
-    }, { passive: true })
+    }, { passive: true, signal })
   }
 
   /**
@@ -873,25 +891,27 @@ export class CoreViewer {
       }
     }
 
+    const signal = this._abortController.signal
+
     document.addEventListener("pointerdown", () => {
       isPointerDown = true
-    })
+    }, { signal })
 
     document.addEventListener("pointerup", () => {
       isPointerDown = false
       clearSelection()
-    })
+    }, { signal })
 
     window.addEventListener("blur", () => {
       isPointerDown = false
       clearSelection()
-    })
+    }, { signal })
 
     document.addEventListener("keyup", () => {
       if (!isPointerDown) {
         clearSelection()
       }
-    })
+    }, { signal })
 
     document.addEventListener("selectionchange", () => {
       // Early return if no text layers registered yet
@@ -965,31 +985,51 @@ export class CoreViewer {
       if (CoreViewer._isIOS) {
         this._updateIOSSelectionHighlights()
       }
-    })
+    }, { signal })
   }
 
   // ===== Cleanup =====
 
-  destroy() {
-    // Remove event listeners
-    this.container.removeEventListener("scroll", this._scrollHandler)
-    this._resizeObserver.disconnect()
-
-    // Clean up rendering queue
-    this._renderingQueue.destroy()
-
-    // Clean up PDF document
-    if (this.pdfDocument) {
-      this.pdfDocument.destroy()
-      this.pdfDocument = null
+  /**
+   * Release the currently-loaded PDF document and all per-page resources.
+   * Used both when loading a replacement document and on destroy().
+   * @returns {Promise<void>}
+   */
+  async _teardownDocument() {
+    // Release page-level rendering resources before destroying the document.
+    for (const pageData of this.pages.values()) {
+      pageData.page?.cleanup?.()
+      pageData.canvas?.remove()
     }
-
-    // Clean up event bus
-    this.eventBus.destroy()
-
-    // Clear container
-    this.container.innerHTML = ""
     this.pages.clear()
     this._textLayers.clear()
+    this.container.innerHTML = ""
+
+    // Destroying the loading task tears down the document and its worker
+    // transport. Guarded because it may already be destroyed or still loading.
+    const loadingTask = this._loadingTask
+    this._loadingTask = null
+    this.pdfDocument = null
+    if (loadingTask) {
+      try {
+        await loadingTask.destroy()
+      } catch (error) {
+        console.warn("Error destroying PDF loading task:", error)
+      }
+    }
+  }
+
+  destroy() {
+    // Remove every listener registered with the abort signal (scroll, pinch,
+    // per-text-layer, and the global document/window selection listeners).
+    this._abortController.abort()
+    this._resizeObserver.disconnect()
+
+    // Clean up rendering queue and event bus
+    this._renderingQueue.destroy()
+    this.eventBus.destroy()
+
+    // Release the PDF document and per-page resources (async; fire-and-forget).
+    this._teardownDocument()
   }
 }
