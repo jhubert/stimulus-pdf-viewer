@@ -6,6 +6,12 @@ import { RenderingQueue, RenderingStates } from "./rendering_queue"
 const workerSrcMeta = document.querySelector('meta[name="pdf-worker-src"]')
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrcMeta?.content || "/assets/pdfjs-dist--pdf.worker.js"
 
+// Browser canvas limits. Most engines cap a canvas at 16384px per side and a
+// total backing-store area; exceeding either silently produces a blank canvas.
+// Large-format pages or high zoom on retina displays can blow past these.
+const MAX_CANVAS_DIM = 16384
+const MAX_CANVAS_PIXELS = 16_777_216 // ~16.7M px, conservative for Safari/iOS
+
 /**
  * Scale values that can be used with setScale()
  */
@@ -176,6 +182,30 @@ export class CoreViewer {
   }
 
   /**
+   * Reduce the device-pixel multiplier so the canvas backing store stays within
+   * the browser's maximum side length and total area. Returns a scale <= the
+   * desired one (it can drop below 1 for very large pages, trading sharpness
+   * for a page that actually renders).
+   * @param {number} cssWidth - displayed width in CSS px
+   * @param {number} cssHeight - displayed height in CSS px
+   * @param {number} desiredScale - preferred multiplier (typically devicePixelRatio)
+   * @returns {number}
+   */
+  _clampOutputScale(cssWidth, cssHeight, desiredScale) {
+    const w = Math.max(1, cssWidth)
+    const h = Math.max(1, cssHeight)
+
+    let scale = Math.min(desiredScale, MAX_CANVAS_DIM / w, MAX_CANVAS_DIM / h)
+
+    const area = w * scale * h * scale
+    if (area > MAX_CANVAS_PIXELS) {
+      scale *= Math.sqrt(MAX_CANVAS_PIXELS / area)
+    }
+
+    return scale
+  }
+
+  /**
    * Create placeholder containers for all pages with correct dimensions.
    * Pages are rendered lazily when they become visible.
    */
@@ -279,16 +309,22 @@ export class CoreViewer {
       // Canvas backing store = displayed size × devicePixelRatio (for retina crispness)
       const cssWidth = Math.round(displayViewport.width)
       const cssHeight = Math.round(displayViewport.height)
-      canvas.width = Math.floor(cssWidth * dpr)
-      canvas.height = Math.floor(cssHeight * dpr)
+
+      // Clamp the backing-store resolution to the browser's canvas limits.
+      // We scale down the device-pixel multiplier (not the displayed CSS size),
+      // so an oversized page degrades to slightly softer rendering instead of a
+      // blank canvas.
+      const outputScale = this._clampOutputScale(cssWidth, cssHeight, dpr)
+      canvas.width = Math.floor(cssWidth * outputScale)
+      canvas.height = Math.floor(cssHeight * outputScale)
 
       container.appendChild(canvas)
 
-      // Render PDF page at displayScale, with DPR transform for retina
+      // Render PDF page at displayScale, with outputScale transform for retina
       await page.render({
         canvasContext: context,
         viewport: displayViewport,
-        transform: [dpr, 0, 0, dpr, 0, 0] // Scale drawing for retina
+        transform: [outputScale, 0, 0, outputScale, 0, 0] // Scale drawing to backing store
       }).promise
 
       // Create or update text layer
