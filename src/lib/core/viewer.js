@@ -12,6 +12,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrcMeta?.content || "/assets/pdfj
 const MAX_CANVAS_DIM = 16384
 const MAX_CANVAS_PIXELS = 16_777_216 // ~16.7M px, conservative for Safari/iOS
 
+// How many pages on each side of the visible range to measure ahead of time.
+// Larger than the rendering queue's pre-render range because measuring is cheap.
+const MEASURE_BUFFER = 5
+
 /**
  * Scale values that can be used with setScale()
  */
@@ -47,6 +51,9 @@ export class CoreViewer {
 
     // Page data storage: pageNumber -> PageData
     this.pages = new Map()
+
+    // Pages with an in-flight dimension measurement (dedup for _measurePage)
+    this._measuringPages = new Set()
 
     // Device pixel ratio for high-DPI displays
     this.devicePixelRatio = window.devicePixelRatio || 1
@@ -144,8 +151,10 @@ export class CoreViewer {
       pdfDocument: this.pdfDocument
     })
 
-    // Trigger initial render of visible pages
+    // Trigger initial render of visible pages, and measure the pages around
+    // them so their placeholders are correctly sized before being scrolled to.
     this._renderingQueue.renderHighestPriority(this.getVisiblePages())
+    this._measurePagesAround()
 
     return this.pdfDocument
   }
@@ -212,7 +221,8 @@ export class CoreViewer {
   async _createPagePlaceholders() {
     // Page 1's size seeds every placeholder so the first paint and page-1
     // render aren't blocked on measuring the whole document. Each page's true
-    // size is then filled in by _populatePageDimensions() below.
+    // size is filled in lazily by _measurePagesAround() as it nears the
+    // viewport (see _onScroll), keeping with the streamed/lazy loading model.
     const firstPage = await this.pdfDocument.getPage(1)
     const firstViewport = firstPage.getViewport({ scale: 1.0, rotation: this._rotationFor(firstPage) })
 
@@ -242,37 +252,59 @@ export class CoreViewer {
     this.eventBus.dispatch(ViewerEvents.PAGES_LOADED, {
       pageCount: this.pageCount
     })
-
-    // Measure the remaining pages in the background so placeholders reserve the
-    // right amount of space. Without this, every placeholder uses page 1's size
-    // and a mixed-size/orientation document visibly jumps as each page renders.
-    this._populatePageDimensions()
   }
 
   /**
-   * Fill in each page's true unit dimensions after the placeholders exist.
-   * Runs sequentially in the background to avoid spiking memory/CPU on large
-   * documents; page 1 is already correct so it is skipped.
+   * Measure pages near the viewport so their placeholders reserve the right
+   * amount of space before the user reaches them. Without this, unmeasured
+   * placeholders use page 1's size and a mixed-size/orientation document jumps
+   * as each page renders.
+   *
+   * Measuring is far cheaper than rendering (getPage + getViewport, no canvas),
+   * so we cover a wider window than the rendering queue's pre-render range while
+   * still staying lazy — we never measure the whole document up front, which
+   * matters for large/streamed PDFs.
    * @returns {Promise<void>}
    */
-  async _populatePageDimensions() {
-    for (let pageNum = 2; pageNum <= this.pageCount; pageNum++) {
-      const pageData = this.pages.get(pageNum)
-      if (!pageData || pageData.unitViewport) continue
+  async _measurePagesAround() {
+    if (!this.pdfDocument) return
 
-      try {
-        const page = await this.pdfDocument.getPage(pageNum)
-        const viewport = page.getViewport({ scale: 1.0, rotation: this._rotationFor(page) })
+    const { first, last } = this.getVisiblePages()
+    if (first === null) return
 
-        // Reuse the loaded page and measured viewport when this page renders.
-        pageData.page = page
-        pageData.unitViewport = viewport
-        pageData.container.style.setProperty("--page-width", `${viewport.width}px`)
-        pageData.container.style.setProperty("--page-height", `${viewport.height}px`)
-      } catch (error) {
-        // Leave the provisional size in place if a page can't be measured.
-        console.warn(`Could not measure page ${pageNum}:`, error)
-      }
+    const from = Math.max(1, first - MEASURE_BUFFER)
+    const to = Math.min(this.pageCount, last + MEASURE_BUFFER)
+
+    for (let pageNum = from; pageNum <= to; pageNum++) {
+      await this._measurePage(pageNum)
+    }
+  }
+
+  /**
+   * Load and measure a single page, caching its size and page proxy. No-op if
+   * already measured or a measurement is already in flight for it.
+   * @param {number} pageNum
+   * @returns {Promise<void>}
+   */
+  async _measurePage(pageNum) {
+    const pageData = this.pages.get(pageNum)
+    if (!pageData || pageData.unitViewport || this._measuringPages.has(pageNum)) return
+
+    this._measuringPages.add(pageNum)
+    try {
+      const page = await this.pdfDocument.getPage(pageNum)
+      const viewport = page.getViewport({ scale: 1.0, rotation: this._rotationFor(page) })
+
+      // Reuse the loaded page and measured viewport when this page renders.
+      pageData.page = page
+      pageData.unitViewport = viewport
+      pageData.container.style.setProperty("--page-width", `${viewport.width}px`)
+      pageData.container.style.setProperty("--page-height", `${viewport.height}px`)
+    } catch (error) {
+      // Leave the provisional size in place if a page can't be measured.
+      console.warn(`Could not measure page ${pageNum}:`, error)
+    } finally {
+      this._measuringPages.delete(pageNum)
     }
   }
 
@@ -474,8 +506,10 @@ export class CoreViewer {
       direction: this._scrollDirection
     })
 
-    // Trigger rendering of visible pages
+    // Trigger rendering of visible pages, and measure the pages just ahead so
+    // their placeholders are sized before they scroll into view.
     this._renderingQueue.renderHighestPriority(this.getVisiblePages())
+    this._measurePagesAround()
   }
 
   /**
