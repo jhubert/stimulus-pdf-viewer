@@ -22,20 +22,6 @@ export class CoordinateTransformer {
     return { x: pdfX, y: pdfY, pageNumber }
   }
 
-  // PDF coordinates (top-left origin) -> screen position
-  pdfToScreen(x, y, pageNumber) {
-    const pageContainer = this.viewer.getPageContainer(pageNumber)
-    if (!pageContainer) return null
-
-    const rect = pageContainer.getBoundingClientRect()
-    const scale = this.viewer.getScale()
-
-    const screenX = x * scale + rect.left
-    const screenY = y * scale + rect.top
-
-    return { x: screenX, y: screenY }
-  }
-
   // Convert selection rectangles to quads format
   selectionRectsToQuads(rects, pageNumber) {
     const pageContainer = this.viewer.getPageContainer(pageNumber)
@@ -151,64 +137,6 @@ export class CoordinateTransformer {
     }
 
     return working
-  }
-
-  // Convert ink strokes from screen coordinates to PDF coordinates
-  strokesToPdfCoords(strokes, pageNumber) {
-    const pageContainer = this.viewer.getPageContainer(pageNumber)
-    if (!pageContainer) return []
-
-    const pageRect = pageContainer.getBoundingClientRect()
-    const scale = this.viewer.getScale()
-
-    return strokes.map(stroke => ({
-      points: stroke.points.map(point => ({
-        x: (point.x - pageRect.left) / scale,
-        y: (point.y - pageRect.top) / scale
-      }))
-    }))
-  }
-
-  // Convert freehand strokes to quads (for freehand highlight)
-  strokesPathToQuads(points, thickness, pageNumber) {
-    const pageContainer = this.viewer.getPageContainer(pageNumber)
-    if (!pageContainer) return []
-
-    const pageRect = pageContainer.getBoundingClientRect()
-    const scale = this.viewer.getScale()
-    const halfThickness = (thickness / 2) / scale
-
-    const quads = []
-
-    for (let i = 1; i < points.length; i++) {
-      const p1 = {
-        x: (points[i - 1].x - pageRect.left) / scale,
-        y: (points[i - 1].y - pageRect.top) / scale
-      }
-      const p2 = {
-        x: (points[i].x - pageRect.left) / scale,
-        y: (points[i].y - pageRect.top) / scale
-      }
-
-      // Calculate perpendicular offset for stroke width
-      const dx = p2.x - p1.x
-      const dy = p2.y - p1.y
-      const len = Math.sqrt(dx * dx + dy * dy)
-
-      if (len === 0) continue
-
-      const nx = -dy / len * halfThickness
-      const ny = dx / len * halfThickness
-
-      quads.push({
-        p1: { x: p1.x - nx, y: p1.y - ny },
-        p2: { x: p1.x + nx, y: p1.y + ny },
-        p3: { x: p2.x - nx, y: p2.y - ny },
-        p4: { x: p2.x + nx, y: p2.y + ny }
-      })
-    }
-
-    return quads
   }
 
   // Calculate bounding rect from quads

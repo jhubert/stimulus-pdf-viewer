@@ -3,7 +3,6 @@ import { TextSelectionTool } from "./text_selection_tool"
 export class UnderlineTool extends TextSelectionTool {
   constructor(pdfViewer) {
     super(pdfViewer)
-    this.underlineColor = "#FF0000"
   }
 
   getModeClass() {

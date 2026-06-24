@@ -700,71 +700,8 @@ export class CoreViewer {
     return this.pages.get(pageNumber)?.container
   }
 
-  getPageCanvas(pageNumber) {
-    return this.pages.get(pageNumber)?.canvas
-  }
-
   getTextLayer(pageNumber) {
     return this.pages.get(pageNumber)?.textLayer
-  }
-
-  getPageHeight(pageNumber) {
-    return this.pages.get(pageNumber)?.unitViewport?.height || 0
-  }
-
-  getPageWidth(pageNumber) {
-    return this.pages.get(pageNumber)?.unitViewport?.width || 0
-  }
-
-  /**
-   * Get page number from a DOM element within a page.
-   * @param {HTMLElement} element
-   * @returns {number|null}
-   */
-  getPageNumberFromElement(element) {
-    const pageContainer = element.closest(".pdf-page")
-    if (pageContainer) {
-      return parseInt(pageContainer.dataset.pageNumber, 10)
-    }
-    return null
-  }
-
-  // ===== Coordinate Transformation =====
-
-  /**
-   * Convert screen coordinates to PDF page coordinates (unscaled).
-   * @param {number} screenX
-   * @param {number} screenY
-   * @param {number} pageNumber
-   * @returns {Object|null} - { x, y } in PDF coordinates
-   */
-  screenToPdfCoords(screenX, screenY, pageNumber) {
-    const pageData = this.pages.get(pageNumber)
-    if (!pageData) return null
-
-    const rect = pageData.container.getBoundingClientRect()
-    const x = (screenX - rect.left) / this.displayScale
-    const y = (screenY - rect.top) / this.displayScale
-
-    return { x, y }
-  }
-
-  /**
-   * Convert PDF page coordinates to screen coordinates.
-   * @param {number} pdfX
-   * @param {number} pdfY
-   * @param {number} pageNumber
-   * @returns {Object|null} - { x, y } in screen coordinates
-   */
-  pdfToScreenCoords(pdfX, pdfY, pageNumber) {
-    const pageData = this.pages.get(pageNumber)
-    if (!pageData) return null
-
-    const rect = pageData.container.getBoundingClientRect()
-    const x = pdfX * this.displayScale + rect.left
-    const y = pdfY * this.displayScale + rect.top
-
-    return { x, y }
   }
 
   // ===== Text Layer Selection Handling =====
