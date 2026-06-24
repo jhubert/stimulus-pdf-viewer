@@ -216,6 +216,16 @@ export class AnnotationDetailPanel {
     return labels[annotationType] || "Annotation"
   }
 
+  /**
+   * Show the detail panel for an annotation.
+   * @param {Object} annotation
+   * @param {HTMLElement} anchorElement
+   * @param {Object} [options]
+   * @param {string|HTMLElement} [options.content] - Custom content rendered in
+   *   the panel's content slot. SECURITY: when passed as a string it is
+   *   assigned to innerHTML, so the consumer MUST supply trusted/sanitized
+   *   HTML. Pass a DOM element instead to avoid the raw-HTML path.
+   */
   show(annotation, anchorElement, options = {}) {
     this.currentAnnotation = annotation
     this.anchorElement = anchorElement

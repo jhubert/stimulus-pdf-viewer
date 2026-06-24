@@ -221,11 +221,16 @@ export class NoteTool extends BaseTool {
           ${Icons.close}
         </button>
       </div>
-      <textarea class="note-dialog-input" rows="4">${existingText || ""}</textarea>
+      <textarea class="note-dialog-input" rows="4"></textarea>
       <div class="note-dialog-actions">
         <button class="note-dialog-save">Save</button>
       </div>
     `
+
+    // Set existing text via the DOM rather than interpolating it into the
+    // markup above — note contents are untrusted and could otherwise break out
+    // of the <textarea> (e.g. "</textarea><img onerror=...>").
+    this.noteDialog.querySelector(".note-dialog-input").value = existingText || ""
 
     document.body.appendChild(this.noteDialog)
 
