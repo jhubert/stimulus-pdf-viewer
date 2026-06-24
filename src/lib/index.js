@@ -51,6 +51,11 @@ export class PdfViewer {
     this.pendingAnnotationSelection = null // Annotation ID to select when rendered
     this._currentPage = 1 // Track current page for change detection
 
+    // Removes the document/container listeners added in _setupEventListeners()
+    // in one shot on destroy(); some live on the global document and would
+    // otherwise leak the viewer across reconnects.
+    this._abortController = new AbortController()
+
     this._setupContainer()
     this._initializeComponents()
     this._setupEventListeners()
@@ -258,6 +263,8 @@ export class PdfViewer {
   }
 
   _setupEventListeners() {
+    const signal = this._abortController.signal
+
     // Handle visibility change for time tracking
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
@@ -265,7 +272,7 @@ export class PdfViewer {
       } else {
         this._resumeTracking()
       }
-    })
+    }, { signal })
 
     // Deselect annotation when clicking outside
     this.pagesContainer.addEventListener("click", (e) => {
@@ -278,12 +285,12 @@ export class PdfViewer {
         return
       }
       this._deselectAnnotation()
-    })
+    }, { signal })
 
     // Handle error events from annotation manager and other components
     this.container.addEventListener("pdf-viewer:error", (e) => {
       this._handleError(e.detail)
-    })
+    }, { signal })
   }
 
   /**
@@ -1379,22 +1386,28 @@ export class PdfViewer {
 
   // Cleanup
   destroy() {
+    // Remove the document/container listeners from _setupEventListeners()
+    this._abortController.abort()
+
     if (this._trackingInterval) {
       clearInterval(this._trackingInterval)
       this._sendTrackingUpdate()
     }
 
-    this.viewer.destroy()
-    this.annotationEditToolbar.destroy()
+    // Optional-chain every component: _initializeComponents() can bail out
+    // early (e.g. missing .pdf-pages-container), leaving these undefined, and
+    // destroy() must still tear down whatever did get created.
+    this.viewer?.destroy()
+    this.annotationEditToolbar?.destroy()
     this.annotationDetailPanel?.destroy()
-    this.undoBar.destroy()
+    this.undoBar?.destroy()
     this.thumbnailSidebar?.destroy()
     this.annotationSidebar?.destroy()
     this.findController?.destroy()
     this.findBar?.destroy()
     this.colorPicker?.destroy()
 
-    Object.values(this.tools).forEach(tool => tool.destroy?.())
+    Object.values(this.tools || {}).forEach(tool => tool.destroy?.())
 
     // Clean up the shared announcer
     destroyAnnouncer()
