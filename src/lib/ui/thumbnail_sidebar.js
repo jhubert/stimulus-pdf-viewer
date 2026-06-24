@@ -31,6 +31,11 @@ export class ThumbnailSidebar {
     this.isOpen = false
     this.sidebarWidth = SIDEBAR_DEFAULT_WIDTH
 
+    // Removes all DOM, document, and EventBus listeners on destroy(). The
+    // EventBus subscriptions in particular would otherwise keep the sidebar
+    // (and its thumbnails/page proxies) alive via the viewer's shared bus.
+    this._abortController = new AbortController()
+
     this._createElements()
     this._setupEventListeners()
   }
@@ -69,14 +74,16 @@ export class ThumbnailSidebar {
   }
 
   _setupEventListeners() {
+    const signal = this._abortController.signal
+
     // Close button in header
     const closeBtn = this.header.querySelector(".pdf-sidebar-close")
-    closeBtn.addEventListener("click", () => this.close())
+    closeBtn.addEventListener("click", () => this.close(), { signal })
 
     // Thumbnail scroll - lazy load thumbnails
     this.thumbnailContainer.addEventListener("scroll", () => {
       this._renderVisibleThumbnails()
-    })
+    }, { signal })
 
     // Sidebar resizing
     this._setupResizer()
@@ -84,7 +91,7 @@ export class ThumbnailSidebar {
     // Listen for page changes from the viewer
     this.eventBus.on(ViewerEvents.PAGE_CHANGING, ({ pageNumber }) => {
       this._onPageChange(pageNumber)
-    })
+    }, { signal })
 
     // Listen for scroll events to update current page indicator
     this.eventBus.on(ViewerEvents.SCROLL, () => {
@@ -92,12 +99,12 @@ export class ThumbnailSidebar {
       if (currentPage !== this.currentPage) {
         this._onPageChange(currentPage)
       }
-    })
+    }, { signal })
 
     // Keyboard navigation within sidebar
     this.thumbnailContainer.addEventListener("keydown", (e) => {
       this._handleKeydown(e)
-    })
+    }, { signal })
   }
 
   _setupResizer() {
@@ -125,9 +132,11 @@ export class ThumbnailSidebar {
       this.element.classList.add("resizing")
       document.body.style.cursor = "ew-resize"
       document.body.style.userSelect = "none"
-      document.addEventListener("mousemove", onMouseMove)
-      document.addEventListener("mouseup", onMouseUp)
-    })
+      // Tie the drag listeners to the abort signal too, so they're removed if
+      // the sidebar is destroyed mid-drag.
+      document.addEventListener("mousemove", onMouseMove, { signal: this._abortController.signal })
+      document.addEventListener("mouseup", onMouseUp, { signal: this._abortController.signal })
+    }, { signal: this._abortController.signal })
   }
 
   _handleKeydown(e) {
@@ -334,6 +343,7 @@ export class ThumbnailSidebar {
    * Clean up
    */
   destroy() {
+    this._abortController.abort()
     for (const thumbnail of this.thumbnails) {
       thumbnail.destroy()
     }

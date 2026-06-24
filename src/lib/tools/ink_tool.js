@@ -298,20 +298,21 @@ export class InkTool extends BaseTool {
       return { points: stroke.pdfPoints }
     })
 
-    // Create annotation
-    await this.annotationManager.createAnnotation({
-      annotation_type: "ink",
-      page: pageNumber,
-      ink_strokes: inkStrokes,
-      rect: [minX, minY, maxX - minX, maxY - minY],
-      color: color,
-      subject: "Free Hand"
-    })
-
-    // Remove temp elements after annotation is created
-    for (const stroke of strokesToSave) {
-      if (stroke.tempElement) {
-        stroke.tempElement.remove()
+    try {
+      // Create annotation
+      await this.annotationManager.createAnnotation({
+        annotation_type: "ink",
+        page: pageNumber,
+        ink_strokes: inkStrokes,
+        rect: [minX, minY, maxX - minX, maxY - minY],
+        color: color,
+        subject: "Free Hand"
+      })
+    } finally {
+      // Always remove the temp preview elements, even if the save failed —
+      // otherwise they're orphaned in the DOM with no remaining reference.
+      for (const stroke of strokesToSave) {
+        stroke.tempElement?.remove()
       }
     }
   }

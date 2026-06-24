@@ -192,6 +192,10 @@ export class ThumbnailView {
    */
   destroy() {
     this.cancelRendering()
+    // Release the PDF.js page proxy so its resources don't accumulate across
+    // documents in a long-lived session.
+    this.pdfPage?.cleanup?.()
+    this.pdfPage = null
     this.div.remove()
   }
 }
