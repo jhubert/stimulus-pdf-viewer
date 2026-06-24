@@ -28,7 +28,7 @@ export const ToolMode = {
 }
 
 // Re-export core components for direct access if needed
-export { CoreViewer, ViewerEvents } from "./core"
+export { CoreViewer, ViewerEvents, ScaleValue } from "./core"
 
 export class PdfViewer {
   constructor(container, options = {}) {

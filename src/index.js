@@ -6,7 +6,7 @@ export { default as PdfViewerController } from "./controllers/pdf_viewer_control
 export { default as PdfDownloadController } from "./controllers/pdf_download_controller"
 
 // Core library exports
-export { PdfViewer, ToolMode, CoreViewer, ViewerEvents } from "./lib"
+export { PdfViewer, ToolMode, CoreViewer, ViewerEvents, ScaleValue } from "./lib"
 
 // Annotation stores for custom persistence
 export {
