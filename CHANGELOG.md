@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0] - 2026-06-24
+
+### Added
+- Page rotation support: pages with a `/Rotate` value (e.g. landscape scans stored as portrait + `/Rotate 90`) now render in their intended orientation instead of sideways. The text layer and highlight/underline overlays rotate with the page so selection and annotations stay aligned.
+- `ScaleValue` is now exported from the package entry points, so consumers can pass the `page-fit` / `page-width` / `auto` presets to `setScale()` by constant.
+
+### Fixed
+- Mixed-size/orientation documents: page placeholders are now sized per page (filled in lazily as you scroll) instead of from page 1, and the fit presets (`page-fit` / `page-width` / `auto`) measure the current page. Previously every page used page 1's dimensions, causing layout jumps and mis-fitted zoom.
+- Large-format pages and high zoom on retina displays no longer render as a blank page: the canvas backing store is clamped to the browser's maximum dimensions/area (degrading to slightly softer rendering instead of failing).
+- "Maximum call stack size exceeded" crash when loading a new PDF, caused by infinite recursion in the internal EventBus when removing an `AbortSignal`-bound listener.
+- Memory leaks across connect/disconnect (Turbo navigation) cycles: the core viewer, orchestrator, and UI components now remove all of their document/window/EventBus listeners on teardown, the core viewer releases the previous PDF document and page resources on reload, and the shared screen-reader announcer is reference-counted so overlapping viewers don't tear it down prematurely.
+
+### Security
+- Fixed stored XSS reachable from untrusted annotation data: note contents in the edit dialog and `annotation.color` values were interpolated into HTML/CSS. Note text is now set via the DOM, colors are validated against a hex allowlist, and the annotation sidebar escapes all non-icon fields.
+
+### Internal
+- Removed dead code (unused coordinate/accessor methods on `CoreViewer` and `CoordinateTransformer`).
+
 ## [0.3.2] - 2026-05-13
 
 ### Added
