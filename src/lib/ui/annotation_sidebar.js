@@ -1,4 +1,5 @@
 import { Icons } from "./icons"
+import { sanitizeColor } from "../color_utils"
 
 /**
  * AnnotationSidebar - Right-side sidebar listing all annotations on the PDF
@@ -403,7 +404,7 @@ export class AnnotationSidebar {
 
       // Populate data-field elements
       this._setField(item, "icon", icon, annotation.color)
-      this._setField(item, "label", this._escapeHtml(label))
+      this._setField(item, "label", label)
       this._setField(item, "type", typeLabel)
       this._setField(item, "page", `Page ${annotation.page}`)
       this._setField(item, "time", timestamp)
@@ -426,7 +427,7 @@ export class AnnotationSidebar {
       const timestamp = this._formatTimestamp(annotation.created_at)
 
       item.innerHTML = `
-        <div class="annotation-item-icon" style="color: ${annotation.color || '#666'}">
+        <div class="annotation-item-icon" style="color: ${sanitizeColor(annotation.color, '#666')}">
           ${icon}
         </div>
         <div class="annotation-item-content">
@@ -463,19 +464,28 @@ export class AnnotationSidebar {
   }
 
   /**
-   * Set a field value in a template-cloned element
+   * Set a field value in a template-cloned element.
+   *
+   * Only the "icon" field is treated as trusted HTML (hard-coded SVG markup);
+   * every other field is set via textContent so untrusted annotation data
+   * (labels, snippets) can't inject markup.
    * @param {HTMLElement} element - The cloned template element
    * @param {string} fieldName - The data-field name to find
-   * @param {string} value - The value to set (can include HTML for icons)
-   * @param {string} color - Optional color to apply
+   * @param {string} value - The value to set (HTML only for the icon field)
+   * @param {string} color - Optional color to apply (icon field only)
    */
   _setField(element, fieldName, value, color) {
     const field = element.querySelector(`[data-field="${fieldName}"]`)
-    if (field) {
+    if (!field) return
+
+    if (fieldName === "icon") {
       field.innerHTML = value
-      if (color && fieldName === "icon") {
+      if (color) {
+        // CSSOM setter rejects malformed values, so it's injection-safe.
         field.style.color = color
       }
+    } else {
+      field.textContent = value
     }
   }
 

@@ -6,6 +6,7 @@ import { AnnotationEditToolbar } from "./ui/annotation_edit_toolbar"
 import { AnnotationDetailPanel } from "./ui/annotation_detail_panel"
 import { UndoBar } from "./ui/undo_bar"
 import { ColorPicker } from "./ui/color_picker"
+import { sanitizeColor } from "./color_utils"
 import { ThumbnailSidebar } from "./ui/thumbnail_sidebar"
 import { AnnotationSidebar } from "./ui/annotation_sidebar"
 import { FindBar } from "./ui/find_bar"
@@ -997,7 +998,7 @@ export class PdfViewer {
           top: ${((y - minY) / containerHeight) * 100}%;
           width: ${(width / containerWidth) * 100}%;
           height: ${(height / containerHeight) * 100}%;
-          background-color: ${annotation.color || ColorPicker.DEFAULT_HIGHLIGHT_COLOR};
+          background-color: ${sanitizeColor(annotation.color, ColorPicker.DEFAULT_HIGHLIGHT_COLOR)};
           opacity: ${annotation.opacity || 0.4};
           cursor: pointer;
         `
@@ -1027,7 +1028,7 @@ export class PdfViewer {
     `
 
     icon.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="${annotation.color || ColorPicker.DEFAULT_HIGHLIGHT_COLOR}" stroke="#000" stroke-width="1">
+      <svg viewBox="0 0 24 24" fill="${sanitizeColor(annotation.color, ColorPicker.DEFAULT_HIGHLIGHT_COLOR)}" stroke="#000" stroke-width="1">
         <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
       </svg>
     `
