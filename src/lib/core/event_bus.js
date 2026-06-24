@@ -27,8 +27,14 @@ export class EventBus {
         console.error("EventBus.on: signal is already aborted")
         return
       }
-      rmAbort = () => this.off(eventName, listener)
-      signal.addEventListener("abort", rmAbort)
+      // Two distinct functions: onAbort removes the listener when the signal
+      // fires; rmAbort detaches onAbort from the signal when the listener is
+      // removed via off(). They must NOT be the same function — if rmAbort
+      // called off(), off()'s own rmAbort?.() invocation would re-enter off()
+      // for the still-present listener and recurse until the stack overflows.
+      const onAbort = () => this.off(eventName, listener)
+      rmAbort = () => signal.removeEventListener("abort", onAbort)
+      signal.addEventListener("abort", onAbort)
     }
 
     const eventListeners = (this._listeners[eventName] ||= [])
