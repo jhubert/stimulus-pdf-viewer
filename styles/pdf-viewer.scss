@@ -519,6 +519,24 @@
   forced-color-adjust: none;
   caret-color: CanvasText;
   z-index: 0;
+  transform-origin: 0 0;
+
+  // Pages with a non-zero /Rotate: PDF.js lays the text layer out in the
+  // page's UNROTATED coordinate space and stamps the page rotation on the layer
+  // as data-main-rotation, expecting the host stylesheet to rotate the layer so
+  // it aligns with the (rotated) canvas. Without these rules the text layer
+  // stays unrotated while the canvas is rotated, so text selection — and the
+  // highlight/underline overlays derived from it — end up 90/180/270° out of
+  // alignment. (Canonical rules from pdfjs-dist web/pdf_viewer.css.)
+  &[data-main-rotation="90"] {
+    transform: rotate(90deg) translateY(-100%);
+  }
+  &[data-main-rotation="180"] {
+    transform: rotate(180deg) translate(-100%, -100%);
+  }
+  &[data-main-rotation="270"] {
+    transform: rotate(270deg) translateX(-100%);
+  }
 
   :is(span, br) {
     color: transparent;
