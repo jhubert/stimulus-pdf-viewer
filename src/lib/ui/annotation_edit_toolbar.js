@@ -14,6 +14,9 @@ export class AnnotationEditToolbar {
     this.element = null
     this.colorDropdownOpen = false
 
+    // Removes the document-level listener(s) below on destroy().
+    this._abortController = new AbortController()
+
     this._createToolbar()
     this._setupEventListeners()
   }
@@ -102,7 +105,7 @@ export class AnnotationEditToolbar {
       if (this.colorDropdownOpen && !this.element.contains(e.target)) {
         this._closeColorDropdown()
       }
-    })
+    }, { signal: this._abortController.signal })
 
     // Handle keyboard shortcuts
     this._keydownHandler = (e) => {
@@ -250,6 +253,7 @@ export class AnnotationEditToolbar {
   }
 
   destroy() {
+    this._abortController.abort()
     if (this._keydownHandler) {
       document.removeEventListener("keydown", this._keydownHandler)
     }

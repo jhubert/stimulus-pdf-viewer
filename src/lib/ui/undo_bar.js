@@ -84,6 +84,10 @@ export class UndoBar {
   destroy() {
     if (this.hideTimeout) {
       clearTimeout(this.hideTimeout)
+      this.hideTimeout = null
     }
+    // The container is host-owned and may be reused across reconnects; clear
+    // the injected buttons so their click listeners don't linger.
+    this.container.innerHTML = ""
   }
 }
