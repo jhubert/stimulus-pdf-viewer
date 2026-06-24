@@ -11,7 +11,7 @@ import { ThumbnailSidebar } from "./ui/thumbnail_sidebar"
 import { AnnotationSidebar } from "./ui/annotation_sidebar"
 import { FindBar } from "./ui/find_bar"
 import { FindController } from "./find_controller"
-import { getAnnouncer, destroyAnnouncer } from "./ui/announcer"
+import { getAnnouncer, acquireAnnouncer, destroyAnnouncer } from "./ui/announcer"
 
 // Annotation tools
 import { SelectTool } from "./tools/select_tool"
@@ -56,6 +56,11 @@ export class PdfViewer {
     // in one shot on destroy(); some live on the global document and would
     // otherwise leak the viewer across reconnects.
     this._abortController = new AbortController()
+
+    // Take a reference on the shared announcer; released in destroy(). Done
+    // unconditionally (even if _initializeComponents bails early) so it stays
+    // balanced with the destroyAnnouncer() call in destroy().
+    acquireAnnouncer()
 
     this._setupContainer()
     this._initializeComponents()

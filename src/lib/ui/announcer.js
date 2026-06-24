@@ -93,12 +93,15 @@ export class Announcer {
   }
 }
 
-// Singleton instance for shared use across the PDF viewer
+// Singleton instance shared across all PDF viewers on the page, plus a
+// reference count of the viewers currently holding it.
 let _sharedInstance = null
+let _refCount = 0
 
 /**
- * Get the shared announcer instance.
- * Creates one if it doesn't exist.
+ * Get the shared announcer instance, creating it if needed.
+ * Use this for ad-hoc announcements; it does NOT take a reference. Viewers
+ * should call acquireAnnouncer()/destroyAnnouncer() to manage its lifecycle.
  * @returns {Announcer}
  */
 export function getAnnouncer() {
@@ -109,11 +112,26 @@ export function getAnnouncer() {
 }
 
 /**
- * Destroy the shared announcer instance.
- * Call this when the PDF viewer is destroyed.
+ * Register a holder of the shared announcer (call once per viewer on init).
+ * Balanced by a later destroyAnnouncer() call.
+ * @returns {Announcer}
+ */
+export function acquireAnnouncer() {
+  _refCount++
+  return getAnnouncer()
+}
+
+/**
+ * Release one holder's reference. The shared live regions are torn down only
+ * once the last holder releases, so destroying one viewer doesn't remove the
+ * region out from under another that's still active (e.g. two viewers
+ * overlapping briefly during Turbo navigation).
  */
 export function destroyAnnouncer() {
-  if (_sharedInstance) {
+  if (_refCount > 0) {
+    _refCount--
+  }
+  if (_refCount === 0 && _sharedInstance) {
     _sharedInstance.destroy()
     _sharedInstance = null
   }
