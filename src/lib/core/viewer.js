@@ -210,30 +210,29 @@ export class CoreViewer {
    * Pages are rendered lazily when they become visible.
    */
   async _createPagePlaceholders() {
-    // Get first page to determine default dimensions
+    // Page 1's size seeds every placeholder so the first paint and page-1
+    // render aren't blocked on measuring the whole document. Each page's true
+    // size is then filled in by _populatePageDimensions() below.
     const firstPage = await this.pdfDocument.getPage(1)
-    const defaultViewport = firstPage.getViewport({ scale: 1.0, rotation: this._rotationFor(firstPage) })
+    const firstViewport = firstPage.getViewport({ scale: 1.0, rotation: this._rotationFor(firstPage) })
 
-    // Create all placeholders immediately with default dimensions
-    // Actual dimensions will be set when each page is rendered
     for (let pageNum = 1; pageNum <= this.pageCount; pageNum++) {
       const pageContainer = document.createElement("div")
       pageContainer.className = "pdf-page"
       pageContainer.dataset.pageNumber = pageNum
 
-      // Use default dimensions (will be corrected when page renders)
-      pageContainer.style.setProperty("--page-width", `${defaultViewport.width}px`)
-      pageContainer.style.setProperty("--page-height", `${defaultViewport.height}px`)
+      // Provisional dimensions (corrected per-page below and again on render)
+      pageContainer.style.setProperty("--page-width", `${firstViewport.width}px`)
+      pageContainer.style.setProperty("--page-height", `${firstViewport.height}px`)
       pageContainer.style.setProperty("--display-scale", String(this.displayScale))
 
       this.container.appendChild(pageContainer)
 
       // Store page data with INITIAL rendering state
-      // page and unitViewport will be set when rendering
       this.pages.set(pageNum, {
         page: pageNum === 1 ? firstPage : null,
         container: pageContainer,
-        unitViewport: pageNum === 1 ? defaultViewport : null,
+        unitViewport: pageNum === 1 ? firstViewport : null,
         canvas: null,
         textLayer: null,
         renderingState: RenderingStates.INITIAL
@@ -243,6 +242,38 @@ export class CoreViewer {
     this.eventBus.dispatch(ViewerEvents.PAGES_LOADED, {
       pageCount: this.pageCount
     })
+
+    // Measure the remaining pages in the background so placeholders reserve the
+    // right amount of space. Without this, every placeholder uses page 1's size
+    // and a mixed-size/orientation document visibly jumps as each page renders.
+    this._populatePageDimensions()
+  }
+
+  /**
+   * Fill in each page's true unit dimensions after the placeholders exist.
+   * Runs sequentially in the background to avoid spiking memory/CPU on large
+   * documents; page 1 is already correct so it is skipped.
+   * @returns {Promise<void>}
+   */
+  async _populatePageDimensions() {
+    for (let pageNum = 2; pageNum <= this.pageCount; pageNum++) {
+      const pageData = this.pages.get(pageNum)
+      if (!pageData || pageData.unitViewport) continue
+
+      try {
+        const page = await this.pdfDocument.getPage(pageNum)
+        const viewport = page.getViewport({ scale: 1.0, rotation: this._rotationFor(page) })
+
+        // Reuse the loaded page and measured viewport when this page renders.
+        pageData.page = page
+        pageData.unitViewport = viewport
+        pageData.container.style.setProperty("--page-width", `${viewport.width}px`)
+        pageData.container.style.setProperty("--page-height", `${viewport.height}px`)
+      } catch (error) {
+        // Leave the provisional size in place if a page can't be measured.
+        console.warn(`Could not measure page ${pageNum}:`, error)
+      }
+    }
   }
 
   /**
@@ -543,8 +574,10 @@ export class CoreViewer {
    * @returns {number}
    */
   _calculateScale(preset) {
-    const firstPage = this.pages.get(1)
-    if (!firstPage) return 1.0
+    // Fit presets are computed from the page the user is actually looking at,
+    // not always page 1 — documents often mix portrait and landscape pages.
+    const pageData = this.pages.get(this.getCurrentPage()) || this.pages.get(1)
+    if (!pageData || !pageData.unitViewport) return 1.0
 
     // Get computed padding from the container
     const computedStyle = window.getComputedStyle(this.container)
@@ -558,8 +591,8 @@ export class CoreViewer {
     const availableWidth = this.container.clientWidth - paddingLeft - paddingRight
     const availableHeight = this.container.clientHeight - paddingTop - paddingBottom
 
-    const pageWidth = firstPage.unitViewport.width
-    const pageHeight = firstPage.unitViewport.height
+    const pageWidth = pageData.unitViewport.width
+    const pageHeight = pageData.unitViewport.height
 
     switch (preset) {
       case ScaleValue.PAGE_WIDTH:
