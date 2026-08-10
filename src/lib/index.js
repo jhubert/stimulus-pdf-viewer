@@ -350,9 +350,10 @@ export class PdfViewer {
         this.viewer.goToPage(this.initialPage)
       }
 
-      // Navigate to initial annotation if specified
+      // Navigate to initial annotation if specified, flashing it so
+      // deep-link visitors can spot it immediately
       if (this.initialAnnotation) {
-        this._scrollToAnnotation(this.initialAnnotation)
+        this._scrollToAnnotationWithFlash(this.initialAnnotation)
       }
 
       // Start with select tool
@@ -1251,20 +1252,9 @@ export class PdfViewer {
     }
   }
 
-  _scrollToAnnotation(annotationId) {
-    const annotation = this.annotationManager.getAnnotation(annotationId)
-    if (!annotation) return
-
-    // Mark this annotation for selection when it's rendered
-    this.pendingAnnotationSelection = annotationId
-
-    // Go to the page - the annotation will be selected in _renderAnnotationsForPage
-    this.viewer.goToPage(annotation.page)
-  }
-
   /**
    * Scroll to annotation and flash/highlight it.
-   * Called from the annotation sidebar when clicking an annotation.
+   * Called from the annotation sidebar and for initial deep-links.
    */
   _scrollToAnnotationWithFlash(annotationId) {
     const annotation = this.annotationManager.getAnnotation(annotationId)

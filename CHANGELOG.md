@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1] - 2026-08-10
+
+### Fixed
+- `initialAnnotation` deep-links never scrolled to or selected the annotation: annotation ids arrive as numbers from the JSON payload but as strings from the `initial-annotation` Stimulus value, and the strictly-typed `Map` lookup missed. `AnnotationManager` and the sidebar now normalize ids to strings, so deep-links, sidebar selection, and delete/update lookups work regardless of id type.
+
+### Changed
+- `initialAnnotation` deep-links now use the same flash/highlight treatment as sidebar clicks, so visitors arriving from a shared link can spot the annotation immediately.
+
 ## [0.4.0] - 2026-06-24
 
 ### Added
