@@ -448,7 +448,7 @@ export class AnnotationSidebar {
     }
 
     // Selection state
-    if (this.selectedAnnotationId === annotation.id) {
+    if (this.selectedAnnotationId === String(annotation.id)) {
       item.classList.add("selected")
     }
 
@@ -556,6 +556,9 @@ export class AnnotationSidebar {
   }
 
   _selectItem(annotationId) {
+    // Ids arrive as numbers from JSON payloads but as strings from DOM
+    // datasets and deep-links, so selection state is tracked as string
+    annotationId = String(annotationId)
     const previousId = this.selectedAnnotationId
 
     // Skip if already selected
@@ -612,7 +615,7 @@ export class AnnotationSidebar {
   onAnnotationDeleted(annotation) {
     if (this.isOpen) {
       // Clear selection if deleted annotation was selected
-      if (this.selectedAnnotationId === annotation.id) {
+      if (this.selectedAnnotationId === String(annotation.id)) {
         const previousId = this.selectedAnnotationId
         this.selectedAnnotationId = null
         this.element.dispatchEvent(new CustomEvent("pdf-sidebar:annotation-deselected", {

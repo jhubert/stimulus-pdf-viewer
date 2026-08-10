@@ -74,7 +74,7 @@ export class AnnotationManager {
     this.annotationsByPage.clear()
 
     for (const annotation of annotationsData) {
-      this.annotations.set(annotation.id, annotation)
+      this.annotations.set(this._key(annotation.id), annotation)
 
       if (!this.annotationsByPage.has(annotation.page)) {
         this.annotationsByPage.set(annotation.page, [])
@@ -83,8 +83,14 @@ export class AnnotationManager {
     }
   }
 
+  // Ids arrive as numbers from JSON payloads but as strings from DOM
+  // datasets and Stimulus values, so the map is keyed by string
+  _key(id) {
+    return String(id)
+  }
+
   getAnnotation(id) {
-    return this.annotations.get(id)
+    return this.annotations.get(this._key(id))
   }
 
   getAnnotationsForPage(pageNumber) {
@@ -130,7 +136,7 @@ export class AnnotationManager {
   }
 
   async deleteAnnotation(id) {
-    const existingAnnotation = this.annotations.get(id)
+    const existingAnnotation = this.getAnnotation(id)
     if (!existingAnnotation) return
 
     try {
@@ -169,7 +175,7 @@ export class AnnotationManager {
   }
 
   _addAnnotation(annotation) {
-    this.annotations.set(annotation.id, annotation)
+    this.annotations.set(this._key(annotation.id), annotation)
 
     if (!this.annotationsByPage.has(annotation.page)) {
       this.annotationsByPage.set(annotation.page, [])
@@ -178,7 +184,7 @@ export class AnnotationManager {
   }
 
   _updateAnnotation(annotation) {
-    const oldAnnotation = this.annotations.get(annotation.id)
+    const oldAnnotation = this.getAnnotation(annotation.id)
     if (!oldAnnotation) {
       this._addAnnotation(annotation)
       return
@@ -195,27 +201,27 @@ export class AnnotationManager {
     } else {
       // Update in place
       const pageAnnotations = this.annotationsByPage.get(annotation.page)
-      const index = pageAnnotations.findIndex(a => a.id === annotation.id)
+      const index = pageAnnotations.findIndex(a => this._key(a.id) === this._key(annotation.id))
       if (index !== -1) {
         pageAnnotations[index] = annotation
       }
     }
 
-    this.annotations.set(annotation.id, annotation)
+    this.annotations.set(this._key(annotation.id), annotation)
   }
 
   _removeAnnotation(id) {
-    const annotation = this.annotations.get(id)
+    const annotation = this.getAnnotation(id)
     if (!annotation) return
 
     this._removeAnnotationFromPage(id, annotation.page)
-    this.annotations.delete(id)
+    this.annotations.delete(this._key(id))
   }
 
   _removeAnnotationFromPage(id, pageNumber) {
     const pageAnnotations = this.annotationsByPage.get(pageNumber)
     if (pageAnnotations) {
-      const index = pageAnnotations.findIndex(a => a.id === id)
+      const index = pageAnnotations.findIndex(a => this._key(a.id) === this._key(id))
       if (index !== -1) {
         pageAnnotations.splice(index, 1)
       }
