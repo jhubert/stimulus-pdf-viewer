@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Password-protected PDF support: the viewer now prompts for the password (with retry on incorrect entry) instead of failing to load. Encrypted documents open in read-only mode — annotation tools are disabled and the download button delivers the original file, since pdf-lib cannot open encrypted PDFs to embed annotations. Read-only mode is exposed via `detail.readOnly` on `pdf-viewer:ready`, a `pdf-viewer-read-only` container class, and `PdfViewer#readOnly`. A password entered during the streamed load is reused by the full-fetch fallback so users aren't prompted twice.
+
 ## [0.4.1] - 2026-08-10
 
 ### Fixed

@@ -16,6 +16,7 @@ A full-featured PDF viewer with annotation support, built for [Stimulus](https:/
 - **Zoom Controls** - Fit to page, fit to width, or custom zoom levels
 - **Watermarks** - User-specific watermarks for document security
 - **Download** - Export PDFs with annotations embedded
+- **Password-Protected PDFs** - Prompts for the password and opens the document read-only
 - **Mobile Support** - Touch gestures, responsive toolbar, pinch-to-zoom
 - **Accessibility** - Screen reader support, keyboard navigation, high contrast mode
 
@@ -178,7 +179,7 @@ The viewer dispatches these custom events on the container element:
 
 | Event | Description |
 |-------|-------------|
-| `pdf-viewer:ready` | Document loaded and ready |
+| `pdf-viewer:ready` | Document loaded and ready (`detail.readOnly` is `true` for encrypted documents) |
 | `pdf-viewer:page-changed` | User navigated to a different page |
 | `pdf-viewer:annotations-loaded` | Annotations fetched and rendered after document load |
 | `pdf-viewer:annotation-created` | New annotation created |
@@ -210,6 +211,19 @@ const viewer = new PdfViewer(container, {
   }
 })
 ```
+
+## Password-Protected PDFs
+
+When a document requires a password, the viewer shows a prompt (with retry on
+incorrect entry) and opens the document once unlocked. Cancelling the prompt
+surfaces the standard load-failure state and dispatches `pdf-viewer:load-failed`.
+
+Encrypted documents open in **read-only mode**: annotation tools are disabled,
+existing annotations are not loaded, and the download button delivers the
+original file instead of an annotated copy (pdf-lib cannot open encrypted PDFs
+to embed annotations). Read-only mode is signalled by `detail.readOnly` on the
+`pdf-viewer:ready` event, a `pdf-viewer-read-only` class on the container, and
+the `readOnly` property on the `PdfViewer` instance.
 
 ## Rails Integration
 

@@ -2467,6 +2467,112 @@
   }
 }
 
+// Password prompt for encrypted documents.
+// Sits above the loading overlay (z-index 100) and toasts (1001) so it is
+// reachable while the host app's spinner is still up.
+.pdf-password-prompt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1002;
+
+  &.hidden {
+    display: none;
+  }
+}
+
+.pdf-password-prompt-dialog {
+  width: min(360px, calc(100% - 32px));
+  padding: 24px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.pdf-password-prompt-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.pdf-password-prompt-message {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #666;
+}
+
+.pdf-password-prompt-error {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #c62828;
+
+  &.hidden {
+    display: none;
+  }
+}
+
+.pdf-password-prompt-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+
+  &:focus {
+    outline: none;
+    border-color: #0060df;
+    box-shadow: 0 0 0 2px rgba(0, 96, 223, 0.2);
+  }
+}
+
+.pdf-password-prompt-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.pdf-password-prompt-btn {
+  padding: 6px 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+
+  &.pdf-password-prompt-submit {
+    background: #0060df;
+    border-color: #0060df;
+    color: #fff;
+
+    &:hover {
+      background: #0050bf;
+    }
+  }
+}
+
+// Read-only mode for encrypted documents: annotation tool buttons are
+// disabled in JS; the color picker has no use, so hide it entirely.
+.pdf-viewer-read-only {
+  .pdf-toolbar-colors {
+    display: none;
+  }
+}
+
 // Screen reader only class for aria-live regions
 // Visually hidden but accessible to screen readers
 .pdf-viewer-announcer {

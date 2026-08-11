@@ -52,6 +52,16 @@ export class DownloadManager {
     this._triggerDownload(pdfBytes, filename)
   }
 
+  // Download the original file untouched. Used for encrypted documents, which
+  // pdf-lib can't open to embed annotations or the watermark.
+  async downloadOriginal() {
+    const request = new FetchRequest("get", this.documentUrl, { responseKind: "blob" })
+    const response = await request.perform()
+    const pdfBytes = await response.response.arrayBuffer()
+    const filename = this._sanitizeFilename(this.documentName || "document")
+    this._triggerDownload(pdfBytes, filename)
+  }
+
   _applyWatermarkToPage(page, font, width, height) {
     if (!this.userName) return
 

@@ -63,7 +63,9 @@ export default class extends Controller {
     if (this.hasLoadingOverlayTarget) {
       this.loadingOverlayTarget.classList.add("hidden")
     }
-    const message = this.errorMessageValue || "Failed to load PDF document"
+    const isPasswordError = /password/i.test(String(error?.message || "")) || /password/i.test(String(error?.name || ""))
+    const message = this.errorMessageValue ||
+      (isPasswordError ? "A password is required to open this document" : "Failed to load PDF document")
     this._showError(message)
     this.containerTarget.dispatchEvent(new CustomEvent("pdf-viewer:load-failed", {
       bubbles: true,
@@ -244,6 +246,10 @@ export default class extends Controller {
   }
 
   _activateTool(toolName) {
+    // View-only for encrypted documents; the buttons are disabled, but guard
+    // against keyboard/programmatic activation too
+    if (this._readOnly && toolName !== "select") return
+
     // Tool map for name -> mode conversion
     const toolMap = {
       select: ToolMode.SELECT,
@@ -429,8 +435,8 @@ export default class extends Controller {
   _setupPageNavigationListeners() {
     // Listen for ready event from PdfViewer
     this._readyHandler = (e) => {
-      const { pageCount, currentPage } = e.detail
-      this._onViewerReady(pageCount, currentPage)
+      const { pageCount, currentPage, readOnly } = e.detail
+      this._onViewerReady(pageCount, currentPage, readOnly)
     }
     this.containerTarget.addEventListener("pdf-viewer:ready", this._readyHandler)
 
@@ -442,10 +448,14 @@ export default class extends Controller {
     this.containerTarget.addEventListener("pdf-viewer:page-changed", this._pageChangedHandler)
   }
 
-  _onViewerReady(pageCount, currentPage) {
+  _onViewerReady(pageCount, currentPage, readOnly) {
     // Hide the loading overlay
     if (this.hasLoadingOverlayTarget) {
       this.loadingOverlayTarget.classList.add("hidden")
+    }
+
+    if (readOnly) {
+      this._enterReadOnlyMode()
     }
 
     if (this.hasPageCountTarget) {
@@ -466,6 +476,16 @@ export default class extends Controller {
 
     // Set initial zoom to "auto" which fits the page width for portrait documents
     this._setZoomPreset("auto")
+  }
+
+  // Encrypted documents are view-only: disable the annotation tools and hide
+  // the color picker. Download stays enabled but delivers the original file.
+  _enterReadOnlyMode() {
+    this._readOnly = true
+    this.containerTarget.classList.add("pdf-viewer-read-only")
+    this.containerTarget
+      .querySelectorAll('.pdf-tool-btn[data-tool]:not([data-tool="select"]), .pdf-overflow-tool-btn[data-tool]:not([data-tool="select"])')
+      .forEach(btn => { btn.disabled = true })
   }
 
   _onPageChanged(currentPage, pageCount) {

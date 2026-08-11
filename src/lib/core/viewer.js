@@ -45,10 +45,20 @@ export class CoreViewer {
     this.container = container
     this.eventBus = options.eventBus || new EventBus()
 
+    // Called when the document needs a password: ({ retry }) => Promise<string>.
+    // Resolve with the password, reject to abort the load. When absent,
+    // password-protected documents fail to load with a PasswordException.
+    this.onPasswordRequest = options.onPasswordRequest || null
+
     // PDF.js document reference
     this.pdfDocument = null
     this._loadingTask = null
     this.pageCount = 0
+
+    // Whether the loaded document is encrypted (user- or owner-password).
+    // Valid after load() resolves.
+    this.isEncrypted = false
+    this._lastPassword = null
 
     // Page data storage: pageNumber -> PageData
     this.pages = new Map()
@@ -110,6 +120,8 @@ export class CoreViewer {
    * @returns {Promise<PDFDocumentProxy>}
    */
   async load(url) {
+    this._lastPassword = null
+    this.isEncrypted = false
     try {
       return await this._loadDocument(url)
     } catch (error) {
@@ -121,7 +133,10 @@ export class CoreViewer {
             throw new Error(`HTTP ${response.status} fetching PDF`)
           }
           const data = new Uint8Array(await response.arrayBuffer())
-          return await this._loadDocument({ data })
+          // Reuse a password entered during the streamed attempt so the
+          // fallback doesn't prompt the user a second time
+          const source = this._lastPassword ? { data, password: this._lastPassword } : { data }
+          return await this._loadDocument(source)
         } catch (retryError) {
           console.error("PDF blob fallback also failed:", retryError)
           this.eventBus.dispatch(ViewerEvents.DOCUMENT_LOAD_ERROR, { error: retryError })
@@ -147,8 +162,31 @@ export class CoreViewer {
     await this._teardownDocument()
 
     this._loadingTask = pdfjsLib.getDocument(source)
+
+    // Prompt for a password instead of failing with PasswordException. PDF.js
+    // calls onPassword again with INCORRECT_PASSWORD after a wrong attempt;
+    // passing an Error to updatePassword aborts the load.
+    if (this.onPasswordRequest) {
+      this._loadingTask.onPassword = (updatePassword, reason) => {
+        const retry = reason === pdfjsLib.PasswordResponses.INCORRECT_PASSWORD
+        Promise.resolve(this.onPasswordRequest({ retry }))
+          .then(password => {
+            this._lastPassword = password
+            updatePassword(password)
+          })
+          .catch(error => {
+            updatePassword(error instanceof Error ? error : new Error("Password entry cancelled"))
+          })
+      }
+    }
+
     this.pdfDocument = await this._loadingTask.promise
     this.pageCount = this.pdfDocument.numPages
+
+    // getPermissions() returns null for unencrypted documents. Any encryption
+    // (user- or owner-password) makes the document read-only downstream:
+    // pdf-lib can't open encrypted files to embed annotations on download.
+    this.isEncrypted = (await this.pdfDocument.getPermissions()) !== null
 
     // Set initial display scale on container
     this.container.style.setProperty("--display-scale", String(this.displayScale))

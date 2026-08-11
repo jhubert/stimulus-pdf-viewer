@@ -11,6 +11,7 @@ import { ThumbnailSidebar } from "./ui/thumbnail_sidebar"
 import { AnnotationSidebar } from "./ui/annotation_sidebar"
 import { FindBar } from "./ui/find_bar"
 import { FindController } from "./find_controller"
+import { PasswordPrompt } from "./ui/password_prompt"
 import { getAnnouncer, acquireAnnouncer, destroyAnnouncer } from "./ui/announcer"
 
 // Annotation tools
@@ -47,6 +48,9 @@ export class PdfViewer {
 
     this.currentTool = null
     this.currentMode = ToolMode.SELECT
+    // True once an encrypted document is loaded: annotations and annotated
+    // download are disabled (pdf-lib can't open encrypted files)
+    this.readOnly = false
     this.selectedAnnotation = null
     this.selectedAnnotationElement = null
     this.pendingAnnotationSelection = null // Annotation ID to select when rendered
@@ -88,9 +92,13 @@ export class PdfViewer {
       return
     }
 
+    // Modal shown when a document needs a password to open
+    this.passwordPrompt = new PasswordPrompt({ container: this.container })
+
     // Core viewer (PDF.js wrapper with lazy rendering and events)
     this.viewer = new CoreViewer(this.pagesContainer, {
-      initialScale: 1.0
+      initialScale: 1.0,
+      onPasswordRequest: ({ retry }) => this.passwordPrompt.request({ retry })
     })
 
     // Subscribe to core viewer events
@@ -234,9 +242,11 @@ export class PdfViewer {
    */
   _onDocumentLoaded(pageCount) {
     this._currentPage = 1
+    this.readOnly = this.viewer.isEncrypted
     this._dispatchEvent("pdf-viewer:ready", {
       pageCount,
-      currentPage: 1
+      currentPage: 1,
+      readOnly: this.readOnly
     })
   }
 
@@ -333,11 +343,12 @@ export class PdfViewer {
         await this.thumbnailSidebar.setDocument(this.viewer.pdfDocument)
       }
 
-      // Load existing annotations from store
-      await this.annotationManager.loadAnnotations()
-
-      // Render annotations on all rendered pages
-      this._renderAnnotations()
+      // Load existing annotations from store and render them on all rendered
+      // pages. Skipped for encrypted documents, which are view-only.
+      if (!this.readOnly) {
+        await this.annotationManager.loadAnnotations()
+        this._renderAnnotations()
+      }
 
       const annotations = this.annotationManager.getAllAnnotations()
       this.container.dispatchEvent(new CustomEvent("pdf-viewer:annotations-loaded", {
@@ -368,6 +379,11 @@ export class PdfViewer {
   }
 
   setTool(mode) {
+    // Encrypted documents are view-only: only the select tool is allowed
+    if (this.readOnly && mode !== ToolMode.SELECT) {
+      return
+    }
+
     // Deactivate current tool
     if (this.currentTool) {
       this.currentTool.deactivate()
@@ -1370,10 +1386,15 @@ export class PdfViewer {
     })
   }
 
-  // Download with annotations
+  // Download with annotations (or the original file for encrypted documents,
+  // which pdf-lib can't open to embed annotations)
   async download() {
     try {
-      await this.downloadManager.downloadWithAnnotations()
+      if (this.readOnly) {
+        await this.downloadManager.downloadOriginal()
+      } else {
+        await this.downloadManager.downloadWithAnnotations()
+      }
     } catch (error) {
       console.error("Failed to download PDF:", error)
       throw error
@@ -1402,6 +1423,7 @@ export class PdfViewer {
     this.findController?.destroy()
     this.findBar?.destroy()
     this.colorPicker?.destroy()
+    this.passwordPrompt?.destroy()
 
     Object.values(this.tools || {}).forEach(tool => tool.destroy?.())
 
