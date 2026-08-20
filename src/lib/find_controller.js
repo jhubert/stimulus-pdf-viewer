@@ -113,6 +113,17 @@ export class FindController {
           // If new matches were added, re-sort and fix current index
           if (this.matches.length > matchCountBefore) {
             this._sortMatchesAndFixIndex()
+
+            // The first search on a document runs before any text has been
+            // extracted, so find() finds nothing and leaves no current match.
+            // Select the first match as soon as one appears; otherwise the UI
+            // sits at "0 of N" with nothing highlighted until the user presses
+            // Next.
+            if (this.currentMatchIndex === -1) {
+              this.currentMatchIndex = 0
+              this.state = FindState.FOUND
+              this._scrollToMatch(0)
+            }
           }
 
           this._updateHighlights(pageNum)

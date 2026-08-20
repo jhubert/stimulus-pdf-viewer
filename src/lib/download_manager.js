@@ -514,12 +514,17 @@ export class DownloadManager {
       .replace(/\s+/g, " ")          // Normalize whitespace
       .trim()
 
+    // Check for emptiness before appending the extension. A name made only of
+    // illegal characters is empty at this point, and appending first would
+    // produce a hidden ".pdf" file instead of falling back.
+    if (!sanitized) return "document.pdf"
+
     // Ensure it ends with .pdf
     if (!sanitized.toLowerCase().endsWith(".pdf")) {
       sanitized += ".pdf"
     }
 
-    return sanitized || "document.pdf"
+    return sanitized
   }
 
   _triggerDownload(bytes, filename) {

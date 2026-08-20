@@ -281,6 +281,11 @@ export class PdfViewer {
   }
 
   _setupEventListeners() {
+    // _initializeComponents() bails out when .pdf-pages-container is missing,
+    // having logged what the host got wrong. Without this guard the
+    // constructor then throws a TypeError here that buries that message.
+    if (!this.pagesContainer) return
+
     const signal = this._abortController.signal
 
     // Handle visibility change for time tracking

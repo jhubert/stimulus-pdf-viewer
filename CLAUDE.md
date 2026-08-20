@@ -9,9 +9,12 @@ stimulus-pdf-viewer is a standalone PDF viewer with annotation support, built fo
 ## Build Commands
 
 ```bash
-npm install      # Install dependencies
-npm run build    # Build with Rollup (outputs to dist/)
-npm run dev      # Watch mode for development
+npm install           # Install dependencies
+npm run build         # Build with Rollup (outputs to dist/)
+npm run dev           # Watch mode for development
+npm test              # Run the test suite once
+npm run test:watch    # Re-run tests on change
+npm run test:coverage # Test suite with a coverage report
 ```
 
 ## Architecture Overview
@@ -106,6 +109,24 @@ PDF.js worker must be configured via a `<meta name="pdf-worker-src">` tag.
    or the annotation renders on screen but is silently dropped from annotated downloads
 7. Add the type to the sidebar filter and display in `lib/ui/annotation_sidebar.js`
 8. Add toolbar button in consuming app's view
+
+**Testing:**
+
+Vitest with jsdom. Tests live in `test/`, mirroring `src/`: `test/unit/` per module,
+`test/integration/` for `PdfViewer` wired to its components.
+
+- `test/helpers/factories.js` builds annotation records; prefer it over inline
+  literals so a shape change is fixed in one place. Note the real field shapes:
+  quads are `{p1..p4}` objects, ink is `ink_strokes: [{points: [{x, y}]}]`
+- `test/helpers/dom.js` stubs element geometry, since jsdom has no layout engine
+  and reports every rect as zero-sized
+- `test/helpers/pdf.js` builds real PDFs with pdf-lib and reads their annotation
+  dictionaries back, so `DownloadManager` is tested against actual PDF output
+- `test/helpers/viewer_fixture.js` provides a `CoreViewer` stand-in sharing a real
+  `EventBus`, so `PdfViewer`'s subscriptions are exercised rather than stubbed
+- pdf-lib, Stimulus, and pdfjs-dist are installed, so prefer the real library over
+  a mock where it runs in node. `PDFDocument.load()` rewrites Producer unless
+  passed `{ updateMetadata: false }` — pass it when asserting on document metadata
 
 **Adding a new UI component:**
 1. Create class in `lib/ui/`

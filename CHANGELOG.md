@@ -4,10 +4,16 @@
 
 ### Fixed
 - Underline annotations are now included in annotated downloads. `DownloadManager` dispatched on an `annotation_type` of `underline` while `UnderlineTool` created annotations as `line`, so `_applyUnderline` was never reached and underlines were silently omitted from the exported PDF. They rendered on screen, so the omission only showed up in the downloaded file. Present since 0.1.0.
+- Search now selects the first match on a document's very first search. Because the first search runs before any text has been extracted, matches arrived from the background extraction with no current match set, leaving the find bar at "0 of N" with nothing highlighted until the user pressed Next. Later searches were unaffected, since the text was already cached.
+- A document whose name consists entirely of characters that are illegal in filenames (e.g. `///`) now downloads as `document.pdf` rather than as a hidden `.pdf` file. The fallback was unreachable because the extension was appended before the empty check.
+- `PdfViewer` no longer throws a `TypeError` when the host's markup is missing `.pdf-pages-container`. It logged an actionable error and bailed out of component initialization, then crashed in event listener setup, burying that message.
 
 ### Changed
 - **The canonical `annotation_type` for underlines is now `underline`, not `line`.** Records are normalized as they enter `AnnotationManager`, so stored `line` values continue to work and no migration is required to upgrade. New annotations are written as `underline`.
 - Annotation vocabulary is centralized in `src/lib/annotation_types.js`, which exports `AnnotationType`, `PDF_SUBTYPES` (the PDF spec subtype each type exports as), and the `isHighlightLike` / `isDrawing` / `isFreeHighlight` / `supportsComment` predicates. `AnnotationType`, `PDF_SUBTYPES`, and `normalizeAnnotationType` are re-exported from the package entry points.
+
+### Internal
+- Added a test suite: Vitest with jsdom, 815 tests covering the annotation vocabulary, stores, annotation and download managers, coordinate transforms, search, tools, UI components, Stimulus controllers, and `PdfViewer`/`CoreViewer`. `npm test` runs it; `npm run test:coverage` reports coverage. `DownloadManager` is tested against real PDFs built and re-parsed with pdf-lib rather than against mocks.
 
 ### Deprecated
 - `annotation_type: "line"`. Still accepted on read and mapped to `underline`, but reading one now logs a one-time console warning naming the migration to run: `UPDATE annotations SET annotation_type = 'underline' WHERE annotation_type = 'line';`. Support will be removed in a future release. Because `annotation_type` is stored in the consuming application's database, a version bump does not migrate existing rows — run the migration before upgrading past the release that drops the alias, since unmigrated records will neither render nor appear in downloads. Absence of the warning during normal use is a good signal that no legacy rows remain.

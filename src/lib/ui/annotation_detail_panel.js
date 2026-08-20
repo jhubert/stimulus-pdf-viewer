@@ -212,10 +212,10 @@ export class AnnotationDetailPanel {
 
   _getTypeLabel(annotationType) {
     const labels = {
-      highlight: "Highlight",
-      line: "Underline",
-      note: "Note",
-      ink: "Drawing"
+      [AnnotationType.HIGHLIGHT]: "Highlight",
+      [AnnotationType.UNDERLINE]: "Underline",
+      [AnnotationType.NOTE]: "Note",
+      [AnnotationType.INK]: "Drawing"
     }
     return labels[annotationType] || "Annotation"
   }
