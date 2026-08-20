@@ -1,5 +1,6 @@
 import { RestAnnotationStore } from "./stores/rest_annotation_store.js"
 import { MemoryAnnotationStore } from "./stores/memory_annotation_store.js"
+import { normalizeAnnotation } from "./annotation_types.js"
 
 // Custom event types for error handling
 export const AnnotationErrorType = {
@@ -74,6 +75,7 @@ export class AnnotationManager {
     this.annotationsByPage.clear()
 
     for (const annotation of annotationsData) {
+      normalizeAnnotation(annotation)
       this.annotations.set(this._key(annotation.id), annotation)
 
       if (!this.annotationsByPage.has(annotation.page)) {
@@ -175,6 +177,8 @@ export class AnnotationManager {
   }
 
   _addAnnotation(annotation) {
+    normalizeAnnotation(annotation)
+
     this.annotations.set(this._key(annotation.id), annotation)
 
     if (!this.annotationsByPage.has(annotation.page)) {
@@ -184,6 +188,8 @@ export class AnnotationManager {
   }
 
   _updateAnnotation(annotation) {
+    normalizeAnnotation(annotation)
+
     const oldAnnotation = this.getAnnotation(annotation.id)
     if (!oldAnnotation) {
       this._addAnnotation(annotation)

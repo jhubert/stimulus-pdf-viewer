@@ -1,5 +1,6 @@
 import { ColorPicker } from "./color_picker"
 import { Icons } from "./icons"
+import { AnnotationType, supportsComment } from "../annotation_types"
 
 export class AnnotationDetailPanel {
   constructor(options = {}) {
@@ -153,13 +154,13 @@ export class AnnotationDetailPanel {
           this.onDelete(this.currentAnnotation)
         }
       } else if (e.key === "e" || e.key === "E") {
-        if (this.currentAnnotation?.annotation_type === "note" && this.onEdit) {
+        if (this.currentAnnotation?.annotation_type === AnnotationType.NOTE && this.onEdit) {
           e.preventDefault()
           this.onEdit(this.currentAnnotation)
         }
       } else if (e.key === "c" || e.key === "C") {
-        const supportsComment = ["highlight", "line", "ink"].includes(this.currentAnnotation?.annotation_type)
-        if (supportsComment && this.onComment) {
+        const canComment = supportsComment(this.currentAnnotation)
+        if (canComment && this.onComment) {
           e.preventDefault()
           this.onComment(this.currentAnnotation)
         }
@@ -243,11 +244,11 @@ export class AnnotationDetailPanel {
 
     // Show/hide buttons based on annotation type
     const isNote = annotation.annotation_type === "note"
-    const supportsComment = ["highlight", "line", "ink"].includes(annotation.annotation_type)
-    this.commentBtn.classList.toggle("hidden", !supportsComment)
+    const canComment = supportsComment(annotation)
+    this.commentBtn.classList.toggle("hidden", !canComment)
     this.editBtn.classList.toggle("hidden", !isNote)
 
-    if (supportsComment) {
+    if (canComment) {
       const hasComment = annotation.contents && annotation.contents.trim()
       this.commentBtn.title = hasComment ? "Edit Comment (C)" : "Add Comment (C)"
     }

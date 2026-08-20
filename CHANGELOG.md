@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Underline annotations are now included in annotated downloads. `DownloadManager` dispatched on an `annotation_type` of `underline` while `UnderlineTool` created annotations as `line`, so `_applyUnderline` was never reached and underlines were silently omitted from the exported PDF. They rendered on screen, so the omission only showed up in the downloaded file. Present since 0.1.0.
+
+### Changed
+- **The canonical `annotation_type` for underlines is now `underline`, not `line`.** Records are normalized as they enter `AnnotationManager`, so stored `line` values continue to work and no migration is required to upgrade. New annotations are written as `underline`.
+- Annotation vocabulary is centralized in `src/lib/annotation_types.js`, which exports `AnnotationType`, `PDF_SUBTYPES` (the PDF spec subtype each type exports as), and the `isHighlightLike` / `isDrawing` / `isFreeHighlight` / `supportsComment` predicates. `AnnotationType`, `PDF_SUBTYPES`, and `normalizeAnnotationType` are re-exported from the package entry points.
+
+### Deprecated
+- `annotation_type: "line"`. Still accepted on read and mapped to `underline`, but reading one now logs a one-time console warning naming the migration to run: `UPDATE annotations SET annotation_type = 'underline' WHERE annotation_type = 'line';`. Support will be removed in a future release. Because `annotation_type` is stored in the consuming application's database, a version bump does not migrate existing rows — run the migration before upgrading past the release that drops the alias, since unmigrated records will neither render nor appear in downloads. Absence of the warning during normal use is a good signal that no legacy rows remain.
+
 ## [0.5.0] - 2026-08-11
 
 ### Added

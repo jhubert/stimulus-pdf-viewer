@@ -13,6 +13,7 @@ import { FindBar } from "./ui/find_bar"
 import { FindController } from "./find_controller"
 import { PasswordPrompt } from "./ui/password_prompt"
 import { getAnnouncer, acquireAnnouncer, destroyAnnouncer } from "./ui/announcer"
+import { AnnotationType, isHighlightLike, supportsComment } from "./annotation_types"
 
 // Annotation tools
 import { SelectTool } from "./tools/select_tool"
@@ -31,6 +32,7 @@ export const ToolMode = {
 
 // Re-export core components for direct access if needed
 export { CoreViewer, ViewerEvents, ScaleValue } from "./core"
+export { AnnotationType, PDF_SUBTYPES, normalizeAnnotationType } from "./annotation_types"
 
 export class PdfViewer {
   constructor(container, options = {}) {
@@ -579,15 +581,14 @@ export class PdfViewer {
 
   _onAnnotationEdit(annotation) {
     // For notes, show the edit popup
-    if (annotation.annotation_type === "note") {
+    if (annotation.annotation_type === AnnotationType.NOTE) {
       this.tools[ToolMode.NOTE].editNote(annotation)
     }
   }
 
   _onAnnotationComment(annotation) {
     // For highlight/underline/ink, use the note tool's edit dialog to edit contents
-    const supportsComment = ["highlight", "line", "ink"].includes(annotation.annotation_type)
-    if (supportsComment) {
+    if (supportsComment(annotation)) {
       this.tools[ToolMode.NOTE].editNote(annotation)
     }
   }
@@ -607,15 +608,15 @@ export class PdfViewer {
 
   /**
    * Get human-readable label for annotation type.
-   * @param {string} type - Annotation type (highlight, note, ink, line)
+   * @param {string} type - Canonical annotation type (see AnnotationType)
    * @returns {string} Human-readable label
    */
   _getAnnotationTypeLabel(type) {
     switch (type) {
-      case "highlight": return "Highlight"
-      case "note": return "Note"
-      case "ink": return "Drawing"
-      case "line": return "Underline"
+      case AnnotationType.HIGHLIGHT: return "Highlight"
+      case AnnotationType.NOTE: return "Note"
+      case AnnotationType.INK: return "Drawing"
+      case AnnotationType.UNDERLINE: return "Underline"
       default: return "Annotation"
     }
   }
@@ -680,9 +681,8 @@ export class PdfViewer {
 
     // Render each annotation using percentage-based positioning
     for (const annotation of annotations) {
-      const isHighlight = annotation.annotation_type === "highlight" ||
-                         (annotation.annotation_type === "ink" && annotation.subject === "Free Highlight")
-      const isUnderline = annotation.annotation_type === "line"
+      const isHighlight = isHighlightLike(annotation)
+      const isUnderline = annotation.annotation_type === AnnotationType.UNDERLINE
 
       if (isHighlight) {
         // Render colored SVG in the highlight layer (has mix-blend-mode for text visibility)
@@ -772,7 +772,7 @@ export class PdfViewer {
   // Render highlight as SVG in the blend layer (for mix-blend-mode to work)
   // Uses unscaled PDF coordinates - SVG viewBox handles scaling
   _renderHighlightSvg(annotation, svgLayer) {
-    if (annotation.annotation_type === "ink") {
+    if (annotation.annotation_type === AnnotationType.INK) {
       this._renderFreehandHighlightSvg(annotation, svgLayer)
       return
     }
@@ -921,7 +921,7 @@ export class PdfViewer {
     container.className = "annotation annotation-highlight"
     container.dataset.annotationId = annotation.id
 
-    if (annotation.annotation_type === "ink") {
+    if (annotation.annotation_type === AnnotationType.INK) {
       // Freehand highlight bounds
       const strokes = annotation.ink_strokes || []
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -967,11 +967,11 @@ export class PdfViewer {
 
   _createAnnotationElement(annotation, pageWidth, pageHeight) {
     switch (annotation.annotation_type) {
-      case "highlight":
+      case AnnotationType.HIGHLIGHT:
         return this._createHighlightElement(annotation, pageWidth, pageHeight)
-      case "note":
+      case AnnotationType.NOTE:
         return this._createNoteElement(annotation, pageWidth, pageHeight)
-      case "ink":
+      case AnnotationType.INK:
         return this._createInkElement(annotation, pageWidth, pageHeight)
       default:
         return null
@@ -1254,7 +1254,7 @@ export class PdfViewer {
   async _onAnnotationColorChange(annotation, color) {
     try {
       // Preserve the existing opacity when changing color (default to 0.4 for highlights/ink, 1 for others)
-      const defaultOpacity = (annotation.annotation_type === "highlight" || annotation.annotation_type === "ink") ? 0.4 : 1
+      const defaultOpacity = (annotation.annotation_type === AnnotationType.HIGHLIGHT || annotation.annotation_type === AnnotationType.INK) ? 0.4 : 1
       const opacity = annotation.opacity ?? defaultOpacity
 
       // Encode opacity into color string as alpha channel (#RRGGBBAA)

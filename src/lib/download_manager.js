@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, degrees, StandardFonts, PDFName, PDFArray, PDFString } from "pdf-lib"
 import { FetchRequest } from "@rails/request.js"
+import { AnnotationType, PDF_SUBTYPES, isFreeHighlight } from "./annotation_types"
 
 export class DownloadManager {
   constructor(options = {}) {
@@ -91,16 +92,16 @@ export class DownloadManager {
   _applyAnnotationsToPage(pdfDoc, page, annotations, pageHeight) {
     for (const annotation of annotations) {
       switch (annotation.annotation_type) {
-        case "highlight":
+        case AnnotationType.HIGHLIGHT:
           this._applyHighlight(pdfDoc, page, annotation, pageHeight)
           break
-        case "underline":
+        case AnnotationType.UNDERLINE:
           this._applyUnderline(pdfDoc, page, annotation, pageHeight)
           break
-        case "ink":
+        case AnnotationType.INK:
           this._applyInk(pdfDoc, page, annotation, pageHeight)
           break
-        case "note":
+        case AnnotationType.NOTE:
           this._applyNote(pdfDoc, page, annotation, pageHeight)
           break
       }
@@ -139,7 +140,7 @@ export class DownloadManager {
 
     const annotationDict = pdfDoc.context.obj({
       Type: PDFName.of("Annot"),
-      Subtype: PDFName.of("Highlight"),
+      Subtype: PDFName.of(PDF_SUBTYPES[AnnotationType.HIGHLIGHT]),
       Rect: [minX, minY, maxX, maxY],
       QuadPoints: quadPoints,
       C: [rgba.r, rgba.g, rgba.b],
@@ -180,7 +181,7 @@ export class DownloadManager {
 
     const annotationDict = pdfDoc.context.obj({
       Type: PDFName.of("Annot"),
-      Subtype: PDFName.of("Underline"),
+      Subtype: PDFName.of(PDF_SUBTYPES[AnnotationType.UNDERLINE]),
       Rect: [minX, minY, maxX, maxY],
       QuadPoints: quadPoints,
       C: [rgba.r, rgba.g, rgba.b],
@@ -193,7 +194,7 @@ export class DownloadManager {
 
   _applyInk(pdfDoc, page, annotation, pageHeight) {
     // Freehand highlights need different rendering (thick, semi-transparent strokes)
-    if (annotation.subject === "Free Highlight") {
+    if (isFreeHighlight(annotation)) {
       this._applyFreehandHighlight(pdfDoc, page, annotation, pageHeight)
       return
     }
@@ -265,7 +266,7 @@ export class DownloadManager {
 
     const annotationDict = pdfDoc.context.obj({
       Type: PDFName.of("Annot"),
-      Subtype: PDFName.of("Ink"),
+      Subtype: PDFName.of(PDF_SUBTYPES[AnnotationType.INK]),
       Rect: [minX, minY, maxX, maxY],
       InkList: inkList,
       C: [rgba.r, rgba.g, rgba.b],
@@ -361,7 +362,7 @@ export class DownloadManager {
 
     const annotationDict = pdfDoc.context.obj({
       Type: PDFName.of("Annot"),
-      Subtype: PDFName.of("Ink"),
+      Subtype: PDFName.of(PDF_SUBTYPES[AnnotationType.INK]),
       Rect: [minX, minY, maxX, maxY],
       InkList: inkList,
       C: [rgba.r, rgba.g, rgba.b],
@@ -387,7 +388,7 @@ export class DownloadManager {
 
     const annotationDict = pdfDoc.context.obj({
       Type: PDFName.of("Annot"),
-      Subtype: PDFName.of("Text"),
+      Subtype: PDFName.of(PDF_SUBTYPES[AnnotationType.NOTE]),
       Rect: [x, pdfY - iconSize, x + iconSize, pdfY],
       Contents: PDFString.of(contents),
       C: [rgba.r, rgba.g, rgba.b],

@@ -1,5 +1,6 @@
 import { ColorPicker } from "./color_picker"
 import { Icons } from "./icons"
+import { supportsComment } from "../annotation_types"
 
 export class AnnotationEditToolbar {
   constructor(options = {}) {
@@ -137,8 +138,8 @@ export class AnnotationEditToolbar {
         }
       } else if (e.key === "c" || e.key === "C") {
         // Comment shortcut for highlight/underline/ink annotations
-        const supportsComment = ["highlight", "line", "ink"].includes(this.currentAnnotation?.annotation_type)
-        if (supportsComment && this.onComment) {
+        const canComment = supportsComment(this.currentAnnotation)
+        if (canComment && this.onComment) {
           e.preventDefault()
           this.onComment(this.currentAnnotation)
         }
@@ -200,14 +201,14 @@ export class AnnotationEditToolbar {
 
     // Show/hide buttons based on annotation type
     const isNote = annotation.annotation_type === "note"
-    const supportsComment = ["highlight", "line", "ink"].includes(annotation.annotation_type)
+    const canComment = supportsComment(annotation)
 
     // Comment button for highlight/underline/ink, edit button for notes
-    this.commentBtn.classList.toggle("hidden", !supportsComment)
+    this.commentBtn.classList.toggle("hidden", !canComment)
     this.editBtn.classList.toggle("hidden", !isNote)
 
     // Update comment button title based on whether contents exists
-    if (supportsComment) {
+    if (canComment) {
       const hasComment = annotation.contents && annotation.contents.trim()
       this.commentBtn.title = hasComment ? "Edit Comment (C)" : "Add Comment (C)"
     }

@@ -36,6 +36,25 @@ npm run dev      # Watch mode for development
 - `AnnotationManager` - CRUD operations via REST API
 - Tools in `src/lib/tools/` all extend `BaseTool` with `activate()`, `deactivate()`, and event handlers
 - Only one tool active at a time, managed by `PdfViewer`
+- `annotation_types.js` - canonical `annotation_type` vocabulary, legacy aliases, and the PDF subtype each type exports as
+
+### Annotation Vocabulary
+
+`annotation_type` is a wire field: it crosses the REST API and lives in the consuming
+application's database, so this library does not control every value it may receive.
+
+- Canonical values are `highlight`, `underline`, `note`, `ink` (`AnnotationType`)
+- Inbound records are normalized once, in `AnnotationManager`. Legacy values are
+  listed in `LEGACY_TYPE_ALIASES`; `line` is accepted and rewritten to `underline`
+- Everything downstream of the manager may assume canonical values. Compare against
+  `AnnotationType` constants, never string literals
+- Freehand highlights are `ink` records discriminated by `subject === "Free Highlight"`,
+  since both pen and highlighter export as PDF Ink annotations. Use the
+  `isHighlightLike` / `isDrawing` / `isFreeHighlight` helpers rather than re-testing
+  the type and subject inline
+
+Note that internal type names are not PDF spec subtype names. `PDF_SUBTYPES` maps
+between them: a `note` exports as PDF subtype `Text`, not `Note`.
 
 **UI Components** (`src/lib/ui/`):
 - Sidebars, find bar, color picker, annotation toolbars
@@ -77,11 +96,16 @@ PDF.js worker must be configured via a `<meta name="pdf-worker-src">` tag.
 ## Common Tasks
 
 **Adding a new annotation type:**
-1. Create tool in `lib/tools/` extending `BaseTool`
-2. Add to `ToolMode` enum in `lib/index.js`
-3. Register in `PdfViewer._initializeComponents()` tools object
-4. Add UI rendering in `PdfViewer._createAnnotationElement()`
-5. Add toolbar button in consuming app's view
+1. Add the canonical type to `AnnotationType` in `lib/annotation_types.js`, and its PDF
+   subtype to `PDF_SUBTYPES`
+2. Create tool in `lib/tools/` extending `BaseTool`, emitting the `AnnotationType` constant
+3. Add to `ToolMode` enum in `lib/index.js`
+4. Register in `PdfViewer._initializeComponents()` tools object
+5. Add UI rendering in `PdfViewer._createAnnotationElement()`
+6. Add a `case` to `DownloadManager._applyAnnotationsToPage()` and a writer for it,
+   or the annotation renders on screen but is silently dropped from annotated downloads
+7. Add the type to the sidebar filter and display in `lib/ui/annotation_sidebar.js`
+8. Add toolbar button in consuming app's view
 
 **Adding a new UI component:**
 1. Create class in `lib/ui/`
