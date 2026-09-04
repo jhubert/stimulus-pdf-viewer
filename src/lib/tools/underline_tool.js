@@ -1,4 +1,5 @@
 import { TextSelectionTool } from "./text_selection_tool"
+import { AnnotationType } from "../annotation_types"
 
 export class UnderlineTool extends TextSelectionTool {
   constructor(pdfViewer) {
@@ -21,7 +22,7 @@ export class UnderlineTool extends TextSelectionTool {
 
   async createAnnotationFromSelection(selectedText, pageNumber, quads, rect) {
     await this.annotationManager.createAnnotation({
-      annotation_type: "line",
+      annotation_type: AnnotationType.UNDERLINE,
       page: pageNumber,
       quads: quads,
       rect: rect,

@@ -1,5 +1,6 @@
 import { TextSelectionTool } from "./text_selection_tool"
 import { ColorPicker } from "../ui/color_picker"
+import { FREE_HIGHLIGHT_SUBJECT } from "../annotation_types"
 
 export class HighlightTool extends TextSelectionTool {
   constructor(pdfViewer) {
@@ -330,7 +331,7 @@ export class HighlightTool extends TextSelectionTool {
       rect: [minX, minY, maxX - minX, maxY - minY],
       color: colorWithAlpha,
       thickness: this.freehandThickness / scale,
-      subject: "Free Highlight"
+      subject: FREE_HIGHLIGHT_SUBJECT
     })
   }
 

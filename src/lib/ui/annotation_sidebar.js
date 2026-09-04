@@ -1,5 +1,6 @@
 import { Icons } from "./icons"
 import { sanitizeColor } from "../color_utils"
+import { AnnotationType, isDrawing, isHighlightLike } from "../annotation_types"
 
 /**
  * AnnotationSidebar - Right-side sidebar listing all annotations on the PDF
@@ -45,7 +46,7 @@ const ANNOTATION_ICONS = {
   ink: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
   </svg>`,
-  line: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  underline: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/>
     <line x1="4" y1="21" x2="20" y2="21" stroke-width="3"/>
   </svg>`
@@ -332,13 +333,13 @@ export class AnnotationSidebar {
 
     switch (this.filterType) {
       case FilterType.HIGHLIGHT:
-        return type === "highlight" || (type === "ink" && annotation.subject === "Free Highlight")
+        return isHighlightLike(annotation)
       case FilterType.NOTE:
-        return type === "note"
+        return type === AnnotationType.NOTE
       case FilterType.DRAWING:
-        return type === "ink" && annotation.subject !== "Free Highlight"
+        return isDrawing(annotation)
       case FilterType.UNDERLINE:
-        return type === "line"
+        return type === AnnotationType.UNDERLINE
       default:
         return true
     }
@@ -493,23 +494,23 @@ export class AnnotationSidebar {
     const type = annotation.annotation_type
     let icon, label, typeLabel
 
-    if (type === "highlight" || (type === "ink" && annotation.subject === "Free Highlight")) {
+    if (isHighlightLike(annotation)) {
       icon = ANNOTATION_ICONS.highlight
       typeLabel = "Highlight"
       // Extract highlighted text if available
       label = annotation.title || annotation.contents || "Freehand Highlight"
       label = this._truncate(label, 80)
-    } else if (type === "note") {
+    } else if (type === AnnotationType.NOTE) {
       icon = ANNOTATION_ICONS.note
       typeLabel = "Note"
       label = annotation.contents || "Empty note"
       label = this._truncate(label, 80)
-    } else if (type === "ink") {
+    } else if (type === AnnotationType.INK) {
       icon = ANNOTATION_ICONS.ink
       typeLabel = "Drawing"
       label = "Ink drawing"
-    } else if (type === "line") {
-      icon = ANNOTATION_ICONS.line
+    } else if (type === AnnotationType.UNDERLINE) {
+      icon = ANNOTATION_ICONS.underline
       typeLabel = "Underline"
       label = annotation.title || "Underlined text"
       label = this._truncate(label, 80)
