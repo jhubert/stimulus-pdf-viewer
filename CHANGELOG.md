@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.0] - 2026-09-22
 
 ### Fixed
 - Underline annotations are now included in annotated downloads. `DownloadManager` dispatched on an `annotation_type` of `underline` while `UnderlineTool` created annotations as `line`, so `_applyUnderline` was never reached and underlines were silently omitted from the exported PDF. They rendered on screen, so the omission only showed up in the downloaded file. Present since 0.1.0.
