@@ -280,6 +280,40 @@ describe("DownloadManager", () => {
     })
   })
 
+  describe("comments", () => {
+    // Regression: only notes wrote Contents, so a comment added to a
+    // highlight, underline, or drawing was dropped from annotated downloads.
+    it.each([
+      ["highlight", highlight],
+      ["underline", underline],
+      ["ink", ink],
+      ["free highlight", freeHighlight]
+    ])("exports the comment on a %s as Contents", async (_label, factory) => {
+      const { bytes } = await download([factory({ page: 1, contents: "Check with counsel" })])
+      const [annot] = await readAnnotations(bytes)
+
+      expect(annot.Contents).toBe("Check with counsel")
+    })
+
+    it("omits Contents when there is no comment", async () => {
+      const { bytes } = await download([highlight({ page: 1, contents: null })])
+      const [annot] = await readAnnotations(bytes)
+
+      expect(annot).not.toHaveProperty("Contents")
+    })
+
+    it("preserves characters outside PDFDocEncoding", async () => {
+      const text = "Vérifier l’échéance — “urgent” ✓"
+      const { bytes } = await download([
+        highlight({ page: 1, contents: text }),
+        note({ page: 1, contents: text })
+      ])
+      const annots = await readAnnotations(bytes)
+
+      expect(annots.map(a => a.Contents)).toEqual([text, text])
+    })
+  })
+
   describe("ink", () => {
     it("gives ink an appearance stream so readers render it identically", async () => {
       const { bytes } = await download([ink({ page: 1 })])

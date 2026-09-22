@@ -51,7 +51,8 @@ function valueToPlain(value, doc) {
     return resolved.asNumber()
   }
   if (name === "PDFString" || name === "PDFHexString") {
-    return resolved.asString()
+    // decodeText handles both PDFDocEncoding and UTF-16BE, as a reader would
+    return resolved.decodeText()
   }
   if (name === "PDFBool") {
     return resolved.asBoolean()

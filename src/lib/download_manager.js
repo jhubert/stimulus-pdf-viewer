@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, degrees, StandardFonts, PDFName, PDFArray, PDFString } from "pdf-lib"
+import { PDFDocument, rgb, degrees, StandardFonts, PDFName, PDFArray, PDFString, PDFHexString } from "pdf-lib"
 import { FetchRequest } from "@rails/request.js"
 import { AnnotationType, PDF_SUBTYPES, isFreeHighlight } from "./annotation_types"
 
@@ -390,7 +390,6 @@ export class DownloadManager {
       Type: PDFName.of("Annot"),
       Subtype: PDFName.of(PDF_SUBTYPES[AnnotationType.NOTE]),
       Rect: [x, pdfY - iconSize, x + iconSize, pdfY],
-      Contents: PDFString.of(contents),
       C: [rgba.r, rgba.g, rgba.b],
       Name: PDFName.of("Comment"),
       Open: false,
@@ -452,6 +451,13 @@ export class DownloadManager {
     // Author (T = title/author in PDF spec)
     if (this.userName) {
       metadata.T = PDFString.of(this.userName)
+    }
+
+    // Contents - a note's body, or the comment on any other annotation type.
+    // fromText encodes as UTF-16BE when needed; PDFString.of only covers
+    // PDFDocEncoding and mangles curly quotes, dashes, and the like.
+    if (annotation.contents) {
+      metadata.Contents = PDFHexString.fromText(annotation.contents)
     }
 
     // Modification date (M) - use annotation's updated_at or created_at
