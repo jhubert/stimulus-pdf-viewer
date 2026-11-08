@@ -30,12 +30,17 @@ export class LinkLayer {
    * @param {Object} options
    * @param {CoreViewer} options.viewer - Supplies pdfDocument, goToPage and the page count
    * @param {EventBus} options.eventBus - ANNOTATION_LAYER_RENDERED is dispatched here
-   * @param {Function} [options.onGoToPage] - Follows an internal link; defaults to viewer.goToPage
+   * @param {Function} [options.onGoToPage] - `(pageNumber, { point })` follows an
+   *   internal link; defaults to viewer.goToPage
+   * @param {Function} [options.onLinkClick] - Called with `{ kind: "external", url }`
+   *   or `{ kind: "internal", pageNumber }` before a link is followed; return
+   *   false to stop it
    */
-  constructor({ viewer, eventBus, onGoToPage }) {
+  constructor({ viewer, eventBus, onGoToPage, onLinkClick }) {
     this.viewer = viewer
     this.eventBus = eventBus
-    this._goToPage = onGoToPage || ((pageNumber) => this.viewer.goToPage(pageNumber))
+    this._goToPage = onGoToPage || ((pageNumber, options) => this.viewer.goToPage(pageNumber, options))
+    this._onLinkClick = onLinkClick || (() => true)
 
     // pageNumber -> Promise<Array<link>>. Links don't change between renders of
     // the same document, so a zoom re-render rebuilds the DOM without asking
@@ -248,6 +253,13 @@ export class LinkLayer {
       a.rel = "noopener noreferrer"
       a.title = link.url.replace(/^mailto:/i, "")
       a.dataset.linkKind = "external"
+      a.addEventListener("click", (event) => {
+        // The anchor opens the URL itself; a host that handles it (a native
+        // app's web view, say) cancels that here.
+        if (this._onLinkClick({ kind: "external", url: link.url }) === false) {
+          event.preventDefault()
+        }
+      })
     } else {
       // A real href keeps the link focusable and announced as a link; the click
       // handler scrolls the viewer instead of navigating.
@@ -258,6 +270,8 @@ export class LinkLayer {
         event.preventDefault()
         this._followInternal(link)
       })
+      // Middle-click would otherwise open "#" in a new tab.
+      a.addEventListener("auxclick", (event) => event.preventDefault())
     }
 
     return a
@@ -265,10 +279,13 @@ export class LinkLayer {
 
   async _followInternal(link) {
     try {
-      const pageNumber = link.kind === "action"
-        ? this._pageForAction(link.action)
-        : await this._pageForDest(link.dest)
-      if (pageNumber) this._goToPage(pageNumber)
+      const target = link.kind === "action"
+        ? { pageNumber: this._pageForAction(link.action), point: null }
+        : await this._resolveDest(link.dest)
+      if (!target?.pageNumber) return
+      if (this._onLinkClick({ kind: "internal", pageNumber: target.pageNumber }) === false) return
+
+      this._goToPage(target.pageNumber, target.point ? { point: target.point } : {})
     } catch (error) {
       console.warn("Could not follow PDF link:", error)
     }
@@ -287,11 +304,18 @@ export class LinkLayer {
   }
 
   /**
-   * Resolve a destination to a 1-based page number. A named destination is
-   * looked up in the document; an explicit one is an array whose first entry
-   * is either a page reference or a 0-based page index.
+   * Resolve a destination to a 1-based page number and, where it names one,
+   * the point on that page to bring to the top-left of the view.
+   *
+   * A named destination is looked up in the document. An explicit one is
+   * `[page, {name: type}, ...args]`, where page is a reference or a 0-based
+   * index and the arguments depend on the type (PDF 32000-1 §12.3.2.2).
+   * The zoom some types carry is ignored: following a link should not change
+   * the reader's zoom.
+   *
+   * @returns {Promise<{pageNumber: number, point: {x, y}|null}|null>}
    */
-  async _pageForDest(dest) {
+  async _resolveDest(dest) {
     const pdfDocument = this.viewer.pdfDocument
     if (!pdfDocument) return null
 
@@ -308,8 +332,49 @@ export class LinkLayer {
 
     if (!Number.isInteger(pageIndex)) return null
     const pageNumber = pageIndex + 1
-    return pageNumber >= 1 && pageNumber <= this.viewer.getPageCount() ? pageNumber : null
+    if (pageNumber < 1 || pageNumber > this.viewer.getPageCount()) return null
+
+    return { pageNumber, point: destinationPoint(explicit) }
   }
+}
+
+const coordinate = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null)
+
+/**
+ * The point an explicit destination asks to be shown at the top-left of the
+ * view, or null when it only names the page (Fit, FitB) or nothing usable.
+ * @param {Array} explicit - `[page, {name}, ...args]`
+ * @returns {{x: number|null, y: number|null}|null}
+ */
+export function destinationPoint(explicit) {
+  const type = explicit[1]?.name ?? explicit[1]
+  const args = explicit.slice(2)
+  let x = null
+  let y = null
+
+  switch (type) {
+    case "XYZ":
+      x = coordinate(args[0])
+      y = coordinate(args[1])
+      break
+    case "FitH":
+    case "FitBH":
+      y = coordinate(args[0])
+      break
+    case "FitV":
+    case "FitBV":
+      x = coordinate(args[0])
+      break
+    case "FitR":
+      // left bottom right top: show the rectangle's top-left
+      x = coordinate(args[0])
+      y = coordinate(args[3])
+      break
+    default:
+      return null
+  }
+
+  return x === null && y === null ? null : { x, y }
 }
 
 /**

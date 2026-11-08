@@ -108,7 +108,8 @@ export class PdfViewer {
     this.linkLayer = new LinkLayer({
       viewer: this.viewer,
       eventBus: this.viewer.eventBus,
-      onGoToPage: (pageNumber) => this.goToPage(pageNumber)
+      onGoToPage: (pageNumber, options) => this.goToPage(pageNumber, options),
+      onLinkClick: (detail) => this._onLinkClick(detail)
     })
 
     // Subscribe to core viewer events
@@ -476,8 +477,8 @@ export class PdfViewer {
    * Navigate to a specific page.
    * @param {number} pageNumber
    */
-  goToPage(pageNumber) {
-    this.viewer?.goToPage(pageNumber)
+  goToPage(pageNumber, options = {}) {
+    this.viewer?.goToPage(pageNumber, options)
     // Check and dispatch page change event
     this._checkPageChange()
   }
@@ -490,6 +491,21 @@ export class PdfViewer {
 
     // Render annotations for this page
     this._renderAnnotationsForPage(pageNumber, pageContainer)
+  }
+
+  /**
+   * Announce a click on a link inside the PDF. Cancelable: a host that calls
+   * preventDefault() on `pdf-viewer:link-clicked` takes over, and the viewer
+   * neither opens the URL nor scrolls.
+   * @returns {boolean} Whether the viewer should follow the link
+   */
+  _onLinkClick(detail) {
+    const event = new CustomEvent("pdf-viewer:link-clicked", {
+      bubbles: true,
+      cancelable: true,
+      detail
+    })
+    return this.container.dispatchEvent(event)
   }
 
   _onTextLayerRendered(pageNumber, textLayer) {

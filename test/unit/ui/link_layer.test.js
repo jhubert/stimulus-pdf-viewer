@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
-import { LinkLayer, safeExternalUrl } from "../../../src/lib/ui/link_layer.js"
+import { LinkLayer, safeExternalUrl, destinationPoint } from "../../../src/lib/ui/link_layer.js"
 import { EventBus, ViewerEvents } from "../../../src/lib/core/event_bus.js"
 import { linkedPdfBytes } from "../../helpers/pdf.js"
 
@@ -143,7 +143,7 @@ describe("LinkLayer", () => {
 
       await click(linksIn(container)[0])
 
-      await vi.waitFor(() => expect(viewer.goToPage).toHaveBeenCalledWith(3))
+      await vi.waitFor(() => expect(viewer.goToPage).toHaveBeenCalledWith(3, {}))
     })
 
     it("resolves a named destination through the document", async () => {
@@ -153,7 +153,7 @@ describe("LinkLayer", () => {
 
       await click(linksIn(container)[1])
 
-      await vi.waitFor(() => expect(viewer.goToPage).toHaveBeenCalledWith(4))
+      await vi.waitFor(() => expect(viewer.goToPage).toHaveBeenCalledWith(4, {}))
     })
 
     it("follows page-navigation named actions", async () => {
@@ -165,8 +165,8 @@ describe("LinkLayer", () => {
       await click(linksIn(container)[3])
 
       await vi.waitFor(() => {
-        expect(viewer.goToPage).toHaveBeenNthCalledWith(1, 3)
-        expect(viewer.goToPage).toHaveBeenNthCalledWith(2, 4)
+        expect(viewer.goToPage).toHaveBeenNthCalledWith(1, 3, {})
+        expect(viewer.goToPage).toHaveBeenNthCalledWith(2, 4, {})
       })
     })
 
@@ -189,8 +189,137 @@ describe("LinkLayer", () => {
 
       await click(linksIn(container)[0])
 
-      await vi.waitFor(() => expect(onGoToPage).toHaveBeenCalledWith(3))
+      await vi.waitFor(() => expect(onGoToPage).toHaveBeenCalledWith(3, {}))
       expect(viewer.goToPage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("link targets", () => {
+    // Each link targets a spot on page 2, in this order.
+    const targets = [
+      { name: "XYZ", goTo: { page: 2, type: "XYZ", args: [72, 500, 0] } },
+      { name: "XYZ keeping left", goTo: { page: 2, type: "XYZ", args: [null, 500, null] } },
+      { name: "FitH", goTo: { page: 2, type: "FitH", args: [400] } },
+      { name: "FitV", goTo: { page: 2, type: "FitV", args: [150] } },
+      { name: "FitR", goTo: { page: 2, type: "FitR", args: [100, 200, 300, 450] } },
+      { name: "Fit", goTo: { page: 2, type: "Fit" } },
+      { name: "named XYZ", namedDest: "minutes" }
+    ]
+    let pdfDocument
+
+    beforeAll(async () => {
+      pdfDocument = await openPdf({
+        pages: 2,
+        namedDests: { minutes: { page: 2, type: "XYZ", args: [0, 320, null] } },
+        links: targets.map(({ name, ...target }, i) => ({ rect: [72, 700 - i * 40, 272, 720 - i * 40], ...target }))
+      })
+    })
+
+    async function follow(name) {
+      const viewer = makeViewer(pdfDocument)
+      const linkLayer = new LinkLayer({ viewer, eventBus })
+      const { container } = await render(linkLayer, pdfDocument)
+      await click(linksIn(container)[targets.findIndex(t => t.name === name)])
+      await vi.waitFor(() => expect(viewer.goToPage).toHaveBeenCalled())
+      return viewer.goToPage.mock.calls[0]
+    }
+
+    it("scrolls to the point an XYZ destination names", async () => {
+      expect(await follow("XYZ")).toEqual([2, { point: { x: 72, y: 500 } }])
+    })
+
+    it("leaves a null coordinate for the viewer to keep", async () => {
+      expect(await follow("XYZ keeping left")).toEqual([2, { point: { x: null, y: 500 } }])
+    })
+
+    it("scrolls to the top a FitH destination names", async () => {
+      expect(await follow("FitH")).toEqual([2, { point: { x: null, y: 400 } }])
+    })
+
+    it("scrolls to the left edge a FitV destination names", async () => {
+      expect(await follow("FitV")).toEqual([2, { point: { x: 150, y: null } }])
+    })
+
+    it("scrolls to the top-left of a FitR rectangle", async () => {
+      expect(await follow("FitR")).toEqual([2, { point: { x: 100, y: 450 } }])
+    })
+
+    it("scrolls to the page when the destination names no point", async () => {
+      expect(await follow("Fit")).toEqual([2, {}])
+    })
+
+    it("resolves a named destination's point", async () => {
+      expect(await follow("named XYZ")).toEqual([2, { point: { x: 0, y: 320 } }])
+    })
+  })
+
+  describe("link clicks", () => {
+    let pdfDocument
+
+    beforeAll(async () => {
+      pdfDocument = await openPdf({
+        pages: 3,
+        links: [
+          { rect: [72, 700, 272, 720], uri: "https://www.youtube.com/watch?v=abc" },
+          { rect: [72, 600, 272, 620], goTo: 3 }
+        ]
+      })
+    })
+
+    async function setup(onLinkClick) {
+      const viewer = makeViewer(pdfDocument)
+      const linkLayer = new LinkLayer({ viewer, eventBus, onLinkClick })
+      const { container } = await render(linkLayer, pdfDocument)
+      const [external, internal] = linksIn(container)
+      return { viewer, external, internal }
+    }
+
+    const clickEvent = (element, type = "click") => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: type === "auxclick" ? 1 : 0 })
+      element.dispatchEvent(event)
+      return event
+    }
+
+    it("tells the host about an external link before it opens", async () => {
+      const onLinkClick = vi.fn()
+      const { external } = await setup(onLinkClick)
+
+      const event = clickEvent(external)
+
+      expect(onLinkClick).toHaveBeenCalledWith({ kind: "external", url: "https://www.youtube.com/watch?v=abc" })
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it("lets the host stop an external link from opening", async () => {
+      const { external } = await setup(() => false)
+
+      expect(clickEvent(external).defaultPrevented).toBe(true)
+    })
+
+    it("tells the host which page an internal link goes to", async () => {
+      const onLinkClick = vi.fn()
+      const { viewer, internal } = await setup(onLinkClick)
+
+      await click(internal)
+
+      await vi.waitFor(() => expect(viewer.goToPage).toHaveBeenCalledWith(3, {}))
+      expect(onLinkClick).toHaveBeenCalledWith({ kind: "internal", pageNumber: 3 })
+    })
+
+    it("lets the host stop an internal link from scrolling", async () => {
+      const onLinkClick = vi.fn(() => false)
+      const { viewer, internal } = await setup(onLinkClick)
+
+      await click(internal)
+
+      await vi.waitFor(() => expect(onLinkClick).toHaveBeenCalled())
+      expect(viewer.goToPage).not.toHaveBeenCalled()
+    })
+
+    it("does not open an internal link's placeholder href on middle-click", async () => {
+      const { internal } = await setup()
+
+      expect(clickEvent(internal, "auxclick").defaultPrevented).toBe(true)
     })
   })
 
@@ -383,5 +512,34 @@ describe("safeExternalUrl", () => {
     null
   ])("rejects %s", (url) => {
     expect(safeExternalUrl(url)).toBeNull()
+  })
+})
+
+describe("destinationPoint", () => {
+  const page = { num: 5, gen: 0 }
+
+  it("reads the type from PDF.js's {name} object or a bare string", () => {
+    expect(destinationPoint([page, { name: "FitH" }, 300])).toEqual({ x: null, y: 300 })
+    expect(destinationPoint([page, "FitH", 300])).toEqual({ x: null, y: 300 })
+  })
+
+  it("ignores the zoom an XYZ destination carries", () => {
+    expect(destinationPoint([page, { name: "XYZ" }, 10, 20, 4])).toEqual({ x: 10, y: 20 })
+  })
+
+  it("treats FitB variants like their Fit counterparts", () => {
+    expect(destinationPoint([page, { name: "FitBH" }, 300])).toEqual({ x: null, y: 300 })
+    expect(destinationPoint([page, { name: "FitBV" }, 40])).toEqual({ x: 40, y: null })
+    expect(destinationPoint([page, { name: "FitB" }])).toBeNull()
+  })
+
+  it("names no point when every coordinate is missing or unusable", () => {
+    expect(destinationPoint([page, { name: "XYZ" }, null, null, null])).toBeNull()
+    expect(destinationPoint([page, { name: "FitH" }, NaN])).toBeNull()
+    expect(destinationPoint([page, { name: "FitH" }])).toBeNull()
+  })
+
+  it("names no point for an unknown destination type", () => {
+    expect(destinationPoint([page, { name: "Sideways" }, 1, 2])).toBeNull()
   })
 })

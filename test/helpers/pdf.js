@@ -70,7 +70,8 @@ function valueToPlain(value, doc) {
  * Each link is `{ page, rect, ...target }` with `page` 1-based, `rect` in PDF
  * user space, and one target:
  * - `uri`: a URI action (any scheme, so unsafe ones can be tested)
- * - `goTo`: a 1-based page, as an explicit /Dest
+ * - `goTo`: an explicit /Dest, either a 1-based page (shown with /Fit) or
+ *   `{ page, type, args }` such as `{ page: 2, type: "XYZ", args: [72, 500, null] }`
  * - `namedDest`: a destination name, resolved through the catalog's /Dests
  * - `named`: a named action, e.g. "NextPage"
  * - `javascript`: a JavaScript action
@@ -78,7 +79,7 @@ function valueToPlain(value, doc) {
  * Any other keys on a link (`Border`, `BS`, `C`, ...) are copied into its
  * annotation dictionary as written.
  *
- * `namedDests` maps names to 1-based pages. `rotate` sets /Rotate on every page.
+ * `namedDests` maps names to destinations in the same two forms as `goTo`. `rotate` sets /Rotate on every page.
  */
 export async function linkedPdfBytes({ pages = 1, width = 612, height = 792, rotate = 0, links = [], namedDests = {} } = {}) {
   const doc = await PDFDocument.create()
@@ -88,12 +89,16 @@ export async function linkedPdfBytes({ pages = 1, width = 612, height = 792, rot
   }
   const ctx = doc.context
   const pageRef = (n) => doc.getPages()[n - 1].ref
+  const destination = (target) => {
+    const { page, type = "Fit", args = [] } = typeof target === "number" ? { page: target } : target
+    return ctx.obj([pageRef(page), type, ...args])
+  }
 
   const destNames = Object.keys(namedDests)
   if (destNames.length > 0) {
     const dests = ctx.obj({})
     for (const name of destNames) {
-      dests.set(PDFName.of(name), ctx.obj([pageRef(namedDests[name]), "Fit"]))
+      dests.set(PDFName.of(name), destination(namedDests[name]))
     }
     doc.catalog.set(PDFName.of("Dests"), dests)
   }
@@ -104,7 +109,7 @@ export async function linkedPdfBytes({ pages = 1, width = 612, height = 792, rot
     if (uri !== undefined) {
       annot.set(PDFName.of("A"), ctx.obj({ S: "URI", URI: PDFString.of(uri) }))
     } else if (goTo !== undefined) {
-      annot.set(PDFName.of("Dest"), ctx.obj([pageRef(goTo), "Fit"]))
+      annot.set(PDFName.of("Dest"), destination(goTo))
     } else if (namedDest !== undefined) {
       annot.set(PDFName.of("Dest"), PDFName.of(namedDest))
     } else if (named !== undefined) {

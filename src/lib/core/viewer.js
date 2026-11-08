@@ -63,8 +63,9 @@ export class CoreViewer {
     // Page data storage: pageNumber -> PageData
     this.pages = new Map()
 
-    // Pages with an in-flight dimension measurement (dedup for _measurePage)
-    this._measuringPages = new Set()
+    // pageNumber -> in-flight dimension measurement, so _measurePage callers
+    // share one and can wait for it
+    this._measuringPages = new Map()
 
     // Device pixel ratio for high-DPI displays
     this.devicePixelRatio = window.devicePixelRatio || 1
@@ -331,30 +332,37 @@ export class CoreViewer {
 
   /**
    * Load and measure a single page, caching its size and page proxy. No-op if
-   * already measured or a measurement is already in flight for it.
+   * already measured; if a measurement is already in flight, returns that one,
+   * so a caller that needs the size can wait for it.
    * @param {number} pageNum
    * @returns {Promise<void>}
    */
-  async _measurePage(pageNum) {
+  _measurePage(pageNum) {
     const pageData = this.pages.get(pageNum)
-    if (!pageData || pageData.unitViewport || this._measuringPages.has(pageNum)) return
+    if (!pageData || pageData.unitViewport) return Promise.resolve()
 
-    this._measuringPages.add(pageNum)
-    try {
-      const page = await this.pdfDocument.getPage(pageNum)
-      const viewport = page.getViewport({ scale: 1.0, rotation: this._rotationFor(page) })
+    const inFlight = this._measuringPages.get(pageNum)
+    if (inFlight) return inFlight
 
-      // Reuse the loaded page and measured viewport when this page renders.
-      pageData.page = page
-      pageData.unitViewport = viewport
-      pageData.container.style.setProperty("--page-width", `${viewport.width}px`)
-      pageData.container.style.setProperty("--page-height", `${viewport.height}px`)
-    } catch (error) {
-      // Leave the provisional size in place if a page can't be measured.
-      console.warn(`Could not measure page ${pageNum}:`, error)
-    } finally {
-      this._measuringPages.delete(pageNum)
-    }
+    const measuring = (async () => {
+      try {
+        const page = await this.pdfDocument.getPage(pageNum)
+        const viewport = page.getViewport({ scale: 1.0, rotation: this._rotationFor(page) })
+
+        // Reuse the loaded page and measured viewport when this page renders.
+        pageData.page = page
+        pageData.unitViewport = viewport
+        pageData.container.style.setProperty("--page-width", `${viewport.width}px`)
+        pageData.container.style.setProperty("--page-height", `${viewport.height}px`)
+      } catch (error) {
+        // Leave the provisional size in place if a page can't be measured.
+        console.warn(`Could not measure page ${pageNum}:`, error)
+      } finally {
+        this._measuringPages.delete(pageNum)
+      }
+    })()
+    this._measuringPages.set(pageNum, measuring)
+    return measuring
   }
 
   /**
@@ -770,10 +778,19 @@ export class CoreViewer {
   // ===== Navigation Methods =====
 
   /**
-   * Navigate to a specific page.
+   * Navigate to a specific page, or to a point on it.
+   *
+   * `point` is in PDF user space, as a link destination gives it: `y` is
+   * scrolled to the top of the viewport and `x` to its left edge. Either may be
+   * null, meaning the top of the page and no horizontal change respectively.
+   * Without a point the page's top is scrolled into view with a little room.
+   *
    * @param {number} pageNumber
+   * @param {Object} [options]
+   * @param {{x: number|null, y: number|null}} [options.point]
+   * @returns {Promise<void>} Settles once the scroll has been started
    */
-  goToPage(pageNumber) {
+  async goToPage(pageNumber, { point = null } = {}) {
     // Ensure pageNumber is an integer
     pageNumber = parseInt(pageNumber, 10)
 
@@ -786,6 +803,12 @@ export class CoreViewer {
       return
     }
 
+    // A point is placed through the page's viewport, which an unvisited page
+    // may not have yet. Measuring also gives its placeholder the true size.
+    if (point && !pageData.unitViewport) {
+      await this._measurePage(pageNumber)
+    }
+
     // Calculate scroll position relative to the scroll container (not the positioned parent)
     // offsetTop is relative to offsetParent which may include toolbar, so we need to
     // calculate relative to the scroll container
@@ -795,15 +818,46 @@ export class CoreViewer {
     // How far the page currently is from the top of the scroll container
     const pageOffsetFromContainer = pageRect.top - containerRect.top
 
-    // Add current scroll position to get absolute position, subtract padding for breathing room
-    const targetScrollTop = this.container.scrollTop + pageOffsetFromContainer - 16
+    const target = point && pageData.unitViewport
+      ? this._pointOnPage(pageData.unitViewport, point)
+      : null
+
+    let scroll
+    if (target) {
+      scroll = { top: this.container.scrollTop + pageOffsetFromContainer + target.top }
+      if (target.left !== null) {
+        scroll.left = Math.max(0, this.container.scrollLeft + (pageRect.left - containerRect.left) + target.left)
+      }
+    } else {
+      // Add current scroll position to get absolute position, subtract padding for breathing room
+      scroll = { top: this.container.scrollTop + pageOffsetFromContainer - 16 }
+    }
 
     this.container.scrollTo({
-      top: Math.max(0, targetScrollTop),
+      ...scroll,
+      top: Math.max(0, scroll.top),
       behavior: "smooth"
     })
 
     this.eventBus.dispatch(ViewerEvents.PAGE_CHANGING, { pageNumber })
+  }
+
+  /**
+   * Convert a PDF user-space point to CSS px from the page's top-left at the
+   * current zoom. The viewport accounts for /Rotate and the crop box offset; a
+   * missing coordinate falls back to the page's top-left corner. Clamped to the
+   * page, since destinations sometimes point past its edge.
+   * @returns {{top: number, left: number|null}}
+   */
+  _pointOnPage(unitViewport, { x = null, y = null }) {
+    const [x0, , , y1] = unitViewport.viewBox
+    const [vx, vy] = unitViewport.convertToViewportPoint(x ?? x0, y ?? y1)
+    const clamp = (value, max) => Math.min(Math.max(value, 0), max)
+
+    return {
+      top: clamp(vy, unitViewport.height) * this.displayScale,
+      left: x === null ? null : clamp(vx, unitViewport.width) * this.displayScale
+    }
   }
 
   /**
