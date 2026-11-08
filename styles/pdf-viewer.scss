@@ -670,6 +670,38 @@
   overflow: visible;
 }
 
+// Hyperlinks written into the PDF (LinkLayer). Above the text layer and below
+// .annotation-layer via DOM order, so the viewer's own annotations win clicks.
+.link-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-link {
+  position: absolute;
+  box-sizing: border-box; // A border the PDF specifies is drawn inside the link's rect
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-user-drag: none;
+
+  // Like Acrobat and Preview, nothing marks a link beyond what the PDF draws
+  // and the pointer cursor. Keyboard focus does need a visible indicator: a
+  // white ring inside a blue one, so one of the two contrasts with the slide
+  // whether it is light or dark.
+  &:focus-visible {
+    outline: 2px solid #0060df;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #fff;
+  }
+}
+
+// Links step aside while an annotation tool is active, or mid-selection, so
+// highlighting or underlining linked text works like any other text.
+.pdf-pages-container:is(.highlight-mode, .underline-mode, .ink-mode, .note-mode, .freehand-mode, .is-selecting-text) .pdf-link {
+  pointer-events: none;
+}
+
 // Annotation layer (above text layer via DOM order)
 .annotation-layer {
   position: absolute;

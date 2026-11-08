@@ -67,17 +67,22 @@ export function makeCoreViewerClass() {
       this.pdfDocument = { numPages: 3 }
     }
 
-    /** Test helper: register a rendered page and announce it. */
-    renderPage(pageNumber) {
-      const page = makePageContainer(pageNumber)
-      this._pages.set(pageNumber, page)
-      this.pagesContainer.appendChild(page)
+    /**
+     * Test helper: register a rendered page and announce it. Pass the PDF.js
+     * `page` and `viewport` to exercise listeners that read the PDF itself.
+     */
+    renderPage(pageNumber, { page, viewport } = {}) {
+      const pageEl = makePageContainer(pageNumber)
+      this._pages.set(pageNumber, pageEl)
+      this.pagesContainer.appendChild(pageEl)
       this.eventBus.dispatch(ViewerEvents.PAGE_RENDERED, {
         pageNumber,
-        canvas: page.querySelector("canvas"),
-        container: page
+        canvas: pageEl.querySelector("canvas"),
+        container: pageEl,
+        page,
+        viewport
       })
-      return page
+      return pageEl
     }
   }
 }

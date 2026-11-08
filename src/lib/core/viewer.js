@@ -479,7 +479,9 @@ export class CoreViewer {
       this.eventBus.dispatch(ViewerEvents.PAGE_RENDERED, {
         pageNumber,
         canvas,
-        container
+        container,
+        page,
+        viewport: displayViewport
       })
 
       this.eventBus.dispatch(ViewerEvents.TEXT_LAYER_RENDERED, {

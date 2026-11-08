@@ -378,6 +378,48 @@ describe("PdfViewer", () => {
     })
   })
 
+  describe("links in the PDF", () => {
+    // A PDF.js page carrying one external and one internal Link annotation.
+    // The identity viewport keeps rects in page units; LinkLayer's own suite
+    // covers real PDF.js output and rotation.
+    const pdfPage = () => ({
+      getAnnotations: vi.fn(async () => [
+        { subtype: "Link", rect: [60, 700, 260, 720], url: "https://www.youtube.com/watch?v=abc" },
+        { subtype: "Link", rect: [60, 600, 260, 620], dest: [2, { name: "Fit" }] }
+      ])
+    })
+    const viewport = {
+      width: 600,
+      height: 800,
+      convertToViewportRectangle: ([x1, y1, x2, y2]) => [x1, 800 - y1, x2, 800 - y2]
+    }
+
+    it("makes a rendered page's links clickable above the PDF and below annotations", async () => {
+      const { viewer } = await makeViewer({ annotations: [note({ page: 1 })] })
+
+      const page = viewer.viewer.renderPage(1, { page: pdfPage(), viewport })
+      await vi.waitFor(() => expect(page.querySelector(".link-layer")).toBeTruthy())
+
+      const external = page.querySelector('.pdf-link[data-link-kind="external"]')
+      expect(external.href).toBe("https://www.youtube.com/watch?v=abc")
+      const layers = Array.from(page.children).map(el => el.classList[0])
+      expect(layers.indexOf("link-layer")).toBeLessThan(layers.indexOf("annotation-layer"))
+    })
+
+    it("follows an internal link through the viewer's navigation", async () => {
+      const { viewer, container } = await makeViewer()
+      const pageChanged = vi.fn()
+      container.addEventListener("pdf-viewer:page-changed", pageChanged)
+
+      const page = viewer.viewer.renderPage(1, { page: pdfPage(), viewport })
+      await vi.waitFor(() => expect(page.querySelector(".link-layer")).toBeTruthy())
+      page.querySelector('.pdf-link[data-link-kind="internal"]').click()
+
+      await vi.waitFor(() => expect(viewer.viewer.goToPage).toHaveBeenCalledWith(3))
+      expect(pageChanged).toHaveBeenCalled()
+    })
+  })
+
   describe("destroy", () => {
     it("tears the core viewer down", async () => {
       const { viewer } = await makeViewer()
