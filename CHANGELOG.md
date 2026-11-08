@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0] - 2026-11-07
 
 ### Fixed
 - Hyperlinks inside a PDF are now clickable in the viewer. A link written by PowerPoint, Keynote, Word or InDesign (a YouTube URL on a slide, a table of contents, a "see page 12" reference) was drawn on the canvas but never made interactive, because the viewer read nothing from the PDF's own `/Annots`. The file itself was never altered; links worked in a downloaded copy. Present since 0.1.0.
