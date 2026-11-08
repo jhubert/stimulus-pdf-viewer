@@ -374,7 +374,7 @@ describe("PdfViewer", () => {
 
       viewer.goToPage(2)
 
-      expect(viewer.viewer.goToPage).toHaveBeenCalledWith(2)
+      expect(viewer.viewer.goToPage).toHaveBeenCalledWith(2, {})
     })
   })
 
@@ -415,8 +415,53 @@ describe("PdfViewer", () => {
       await vi.waitFor(() => expect(page.querySelector(".link-layer")).toBeTruthy())
       page.querySelector('.pdf-link[data-link-kind="internal"]').click()
 
-      await vi.waitFor(() => expect(viewer.viewer.goToPage).toHaveBeenCalledWith(3))
+      await vi.waitFor(() => expect(viewer.viewer.goToPage).toHaveBeenCalledWith(3, {}))
       expect(pageChanged).toHaveBeenCalled()
+    })
+
+    async function renderLinks() {
+      const made = await makeViewer()
+      const page = made.viewer.viewer.renderPage(1, { page: pdfPage(), viewport })
+      await vi.waitFor(() => expect(page.querySelector(".link-layer")).toBeTruthy())
+      return {
+        ...made,
+        external: page.querySelector('.pdf-link[data-link-kind="external"]'),
+        internal: page.querySelector('.pdf-link[data-link-kind="internal"]')
+      }
+    }
+
+    it("announces link clicks as pdf-viewer:link-clicked", async () => {
+      const { viewer, container, external, internal } = await renderLinks()
+      const clicked = vi.fn()
+      container.addEventListener("pdf-viewer:link-clicked", (e) => clicked(e.detail))
+
+      external.click()
+      internal.click()
+
+      await vi.waitFor(() => expect(viewer.viewer.goToPage).toHaveBeenCalled())
+      expect(clicked).toHaveBeenNthCalledWith(1, { kind: "external", url: "https://www.youtube.com/watch?v=abc" })
+      expect(clicked).toHaveBeenNthCalledWith(2, { kind: "internal", pageNumber: 3 })
+    })
+
+    it("lets the host take over an external link by cancelling the event", async () => {
+      const { container, external } = await renderLinks()
+      container.addEventListener("pdf-viewer:link-clicked", (e) => e.preventDefault())
+
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true })
+      external.dispatchEvent(click)
+
+      expect(click.defaultPrevented).toBe(true)
+    })
+
+    it("does not scroll when the host cancels an internal link", async () => {
+      const { viewer, container, internal } = await renderLinks()
+      const cancelled = vi.fn((e) => e.preventDefault())
+      container.addEventListener("pdf-viewer:link-clicked", cancelled)
+
+      internal.click()
+
+      await vi.waitFor(() => expect(cancelled).toHaveBeenCalled())
+      expect(viewer.viewer.goToPage).not.toHaveBeenCalled()
     })
   })
 

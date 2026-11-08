@@ -23,6 +23,10 @@ vi.mock("pdfjs-dist", () => ({
 }))
 
 const { CoreViewer, ScaleValue } = await import("../../../src/lib/core/viewer.js")
+const { linkedPdfBytes } = await import("../../helpers/pdf.js")
+const { stubRect } = await import("../../helpers/dom.js")
+// The mock above replaces "pdfjs-dist" only; the legacy build is real PDF.js.
+const realPdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
 const { ViewerEvents } = await import("../../../src/lib/core/event_bus.js")
 
 /** Build a PDF.js document proxy over N pages of the given size. */
@@ -64,6 +68,32 @@ function resolveWith(pdfDocument) {
     return task
   })
   return tasks
+}
+
+/**
+ * A document whose pages are real PDF.js pages, so their viewports place
+ * points exactly as in the browser, with rendering stubbed out.
+ */
+async function makeRealPdfDocument(options) {
+  const data = await linkedPdfBytes(options)
+  const real = await realPdfjs.getDocument({ data, isEvalSupported: false }).promise
+  return {
+    numPages: real.numPages,
+    getPermissions: vi.fn(async () => null),
+    getPage: vi.fn(async (n) => {
+      const page = await real.getPage(n)
+      return {
+        pageNumber: n,
+        rotate: page.rotate,
+        getViewport: (params) => page.getViewport(params),
+        render: vi.fn(() => ({ promise: Promise.resolve(), cancel: vi.fn() })),
+        getTextContent: vi.fn(async () => ({ items: [] })),
+        cleanup: vi.fn()
+      }
+    }),
+    destroy: vi.fn(async () => {}),
+    cleanup: vi.fn()
+  }
 }
 
 function rejectWith(error) {
@@ -483,6 +513,89 @@ describe("CoreViewer", () => {
 
       expect(() => viewer.goToPage(0)).not.toThrow()
       expect(() => viewer.goToPage(99)).not.toThrow()
+    })
+
+    describe("to a point on a page", () => {
+      // Page 2 sits 900px down the scroll container, 50px in, at zoom 1.5.
+      // Pages are US Letter: 612 x 792pt.
+      async function setup({ rotate = 0, numPages = 3, scrollTop = 100 } = {}) {
+        resolveWith(await makeRealPdfDocument({ pages: numPages, rotate }))
+        const viewer = new CoreViewer(container, { initialScale: 1.5 })
+        await viewer.load("/doc.pdf")
+
+        stubRect(container, { top: 0, left: 0, width: 800, height: 600 })
+        container.scrollTop = scrollTop
+        container.scrollTo = vi.fn()
+        for (const n of viewer.pages.keys()) {
+          stubRect(viewer.getPageContainer(n), { top: 900, left: 50, width: 918, height: 1188 })
+        }
+        return viewer
+      }
+
+      const scrolledTo = (viewer) => container.scrollTo.mock.calls.at(-1)[0]
+
+      it("brings the point's height to the top of the view", async () => {
+        const viewer = await setup()
+
+        await viewer.goToPage(2, { point: { x: null, y: 692 } })
+
+        // 100pt below the page top at 1.5x, plus page offset and current scroll
+        expect(scrolledTo(viewer)).toEqual({ top: 100 + 900 + 150, behavior: "smooth" })
+      })
+
+      it("scrolls sideways when the destination names a left edge", async () => {
+        const viewer = await setup()
+
+        await viewer.goToPage(2, { point: { x: 72, y: 692 } })
+
+        expect(scrolledTo(viewer).left).toBe(50 + 72 * 1.5)
+      })
+
+      it("takes a missing height as the top of the page", async () => {
+        const viewer = await setup()
+
+        await viewer.goToPage(2, { point: { x: 72, y: null } })
+
+        expect(scrolledTo(viewer).top).toBe(100 + 900)
+      })
+
+      it("keeps a point that runs past the page on the page", async () => {
+        const viewer = await setup()
+
+        await viewer.goToPage(2, { point: { x: null, y: 5000 } })
+        expect(scrolledTo(viewer).top).toBe(100 + 900)
+
+        await viewer.goToPage(2, { point: { x: null, y: -300 } })
+        expect(scrolledTo(viewer).top).toBe(100 + 900 + 792 * 1.5)
+      })
+
+      it("places the point on a rotated page as displayed", async () => {
+        // With /Rotate 90 the page's left edge becomes its top, so a point's
+        // height on screen comes from its PDF x.
+        const viewer = await setup({ rotate: 90 })
+
+        await viewer.goToPage(2, { point: { x: 72, y: 692 } })
+
+        expect(scrolledTo(viewer).top).toBe(100 + 900 + 72 * 1.5)
+      })
+
+      it("measures a page it has not reached yet before placing the point", async () => {
+        const viewer = await setup({ numPages: 12 })
+        expect(viewer.pages.get(12).unitViewport).toBeNull()
+
+        await viewer.goToPage(12, { point: { x: null, y: 692 } })
+
+        expect(viewer.pages.get(12).unitViewport).toBeTruthy()
+        expect(scrolledTo(viewer).top).toBe(100 + 900 + 150)
+      })
+
+      it("keeps the page-level jump's breathing room without a point", async () => {
+        const viewer = await setup()
+
+        await viewer.goToPage(2)
+
+        expect(scrolledTo(viewer)).toEqual({ top: 100 + 900 - 16, behavior: "smooth" })
+      })
     })
   })
 

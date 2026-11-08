@@ -191,6 +191,7 @@ The viewer dispatches these custom events on the container element:
 | `pdf-viewer:detail-panel-opened` | Detail panel opened for an annotation |
 | `pdf-viewer:detail-panel-closed` | Detail panel closed |
 | `pdf-viewer:scale-changed` | Zoom level changed |
+| `pdf-viewer:link-clicked` | A link inside the PDF was clicked. `detail` is `{ kind: "external", url }` or `{ kind: "internal", pageNumber }`. Cancelable: call `preventDefault()` to handle the link yourself (e.g. in a native app's web view), and the viewer will neither open the URL nor scroll |
 | `pdf-viewer:mode-changed` | Tool mode switched |
 | `pdf-viewer:error` | Error occurred |
 | `pdf-viewer:user-error` | User-facing error occurred |
