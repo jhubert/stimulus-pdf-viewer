@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Hyperlinks inside a PDF are now clickable in the viewer. A link written by PowerPoint, Keynote, Word or InDesign (a YouTube URL on a slide, a table of contents, a "see page 12" reference) was drawn on the canvas but never made interactive, because the viewer read nothing from the PDF's own `/Annots`. The file itself was never altered; links worked in a downloaded copy. Present since 0.1.0.
+  - Web (`http`, `https`) and `mailto` links open in a new tab with `rel="noopener noreferrer"`. Other schemes, JavaScript, launch and embedded-file actions are not followed.
+  - Links to another page (explicit and named destinations, plus the `NextPage` / `PrevPage` / `FirstPage` / `LastPage` named actions) scroll the viewer to that page.
+  - Links sit above the text layer and below the viewer's own annotations, so highlights and notes keep priority on clicks. They stand aside while an annotation tool is active or text is being selected, so linked text can still be highlighted.
+
+### Added
+- `LinkLayer` (`src/lib/ui/link_layer.js`), which builds a `.link-layer` of `a.pdf-link` elements per page. Links are positioned in percentages of the page, so they follow zoom without being re-placed. Hosts can restyle `.pdf-link` (by default it shows a faint hover tint and a focus outline).
+- `ViewerEvents.ANNOTATION_LAYER_RENDERED` is now dispatched on the internal `EventBus` after each page's links are placed, with `{ pageNumber, layer, linkCount }`. `layer` is `null` for a page with no links. The event was declared previously but never fired.
+- `ViewerEvents.PAGE_RENDERED` now also carries the PDF.js `page` and the `viewport` the page was drawn at.
+
 ## [0.6.0] - 2026-09-22
 
 ### Fixed

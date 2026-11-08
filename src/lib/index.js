@@ -12,6 +12,7 @@ import { AnnotationSidebar } from "./ui/annotation_sidebar"
 import { FindBar } from "./ui/find_bar"
 import { FindController } from "./find_controller"
 import { PasswordPrompt } from "./ui/password_prompt"
+import { LinkLayer } from "./ui/link_layer"
 import { getAnnouncer, acquireAnnouncer, destroyAnnouncer } from "./ui/announcer"
 import { AnnotationType, isHighlightLike, supportsComment } from "./annotation_types"
 
@@ -101,6 +102,13 @@ export class PdfViewer {
     this.viewer = new CoreViewer(this.pagesContainer, {
       initialScale: 1.0,
       onPasswordRequest: ({ retry }) => this.passwordPrompt.request({ retry })
+    })
+
+    // Makes the hyperlinks written into the PDF itself clickable
+    this.linkLayer = new LinkLayer({
+      viewer: this.viewer,
+      eventBus: this.viewer.eventBus,
+      onGoToPage: (pageNumber) => this.goToPage(pageNumber)
     })
 
     // Subscribe to core viewer events
@@ -218,8 +226,9 @@ export class PdfViewer {
     })
 
     // Page rendered - apply watermark and render annotations
-    eventBus.on(ViewerEvents.PAGE_RENDERED, ({ pageNumber, canvas, container }) => {
+    eventBus.on(ViewerEvents.PAGE_RENDERED, ({ pageNumber, canvas, container, page, viewport }) => {
       this._onPageRendered(pageNumber, canvas, container)
+      this.linkLayer.renderPage(pageNumber, container, page, viewport)
     })
 
     // Text layer ready - notify tools and find controller
@@ -1429,6 +1438,7 @@ export class PdfViewer {
     this.findBar?.destroy()
     this.colorPicker?.destroy()
     this.passwordPrompt?.destroy()
+    this.linkLayer?.destroy()
 
     Object.values(this.tools || {}).forEach(tool => tool.destroy?.())
 

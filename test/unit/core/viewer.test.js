@@ -341,6 +341,24 @@ describe("CoreViewer", () => {
     })
   })
 
+  describe("rendering", () => {
+    it("hands listeners the page and the viewport it was drawn at", async () => {
+      // LinkLayer positions a page's links from these, without its own lookup.
+      resolveWith(makePdfDocument())
+      const viewer = new CoreViewer(container, { initialScale: 1.5 })
+      await viewer.load("/doc.pdf")
+
+      const rendered = vi.fn()
+      viewer.eventBus.on(ViewerEvents.PAGE_RENDERED, rendered)
+      await viewer.renderPage(2)
+
+      const detail = rendered.mock.calls.at(-1)[0]
+      expect(detail.pageNumber).toBe(2)
+      expect(detail.page.pageNumber).toBe(2)
+      expect(detail.viewport.scale).toBe(1.5)
+    })
+  })
+
   describe("canvas clamping", () => {
     // Exceeding a browser's canvas limits silently yields a blank page.
     it("leaves a normal page at the requested device pixel ratio", () => {

@@ -11,6 +11,7 @@ A full-featured PDF viewer with annotation support, built for [Stimulus](https:/
 - **PDF Rendering** - Powered by Mozilla's PDF.js with lazy page loading
 - **Annotations** - Highlights, underlines, sticky notes, and freehand drawing
 - **Detail Panel** - Anchored panel for viewing and editing annotation details (opt-in)
+- **Links** - Hyperlinks in the PDF are clickable: web and email links open in a new tab, links to other pages scroll the viewer
 - **Search** - Find text within the document with keyboard shortcuts
 - **Thumbnails** - Page thumbnail sidebar for quick navigation
 - **Zoom Controls** - Fit to page, fit to width, or custom zoom levels
