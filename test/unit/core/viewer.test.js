@@ -80,6 +80,8 @@ async function makeRealPdfDocument(options) {
   return {
     numPages: real.numPages,
     getPermissions: vi.fn(async () => null),
+    getDestination: (name) => real.getDestination(name),
+    getPageIndex: (ref) => real.getPageIndex(ref),
     getPage: vi.fn(async (n) => {
       const page = await real.getPage(n)
       return {
@@ -587,6 +589,26 @@ describe("CoreViewer", () => {
 
         expect(viewer.pages.get(12).unitViewport).toBeTruthy()
         expect(scrolledTo(viewer).top).toBe(100 + 900 + 150)
+      })
+
+      it("scrolls to a named destination's page and point", async () => {
+        resolveWith(await makeRealPdfDocument({ pages: 3, namedDests: { minutes: { page: 2, type: "XYZ", args: [null, 692, null] } } }))
+        const viewer = new CoreViewer(container, { initialScale: 1.5 })
+        await viewer.load("/doc.pdf")
+        stubRect(container, { top: 0, left: 0, width: 800, height: 600 })
+        container.scrollTop = 100
+        container.scrollTo = vi.fn()
+        stubRect(viewer.getPageContainer(2), { top: 900, left: 50, width: 918, height: 1188 })
+
+        expect(await viewer.goToDestination("minutes")).toBe(true)
+        expect(container.scrollTo).toHaveBeenLastCalledWith({ top: 100 + 900 + 150, behavior: "smooth" })
+      })
+
+      it("reports a destination the document does not define", async () => {
+        const viewer = await setup()
+
+        expect(await viewer.goToDestination("nowhere")).toBe(false)
+        expect(container.scrollTo).not.toHaveBeenCalled()
       })
 
       it("keeps the page-level jump's breathing room without a point", async () => {

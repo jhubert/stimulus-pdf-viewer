@@ -14,6 +14,7 @@ export default class extends Controller {
     documentId: String,
     trackingUrl: String,
     initialPage: Number,
+    initialDestination: String,
     initialAnnotation: String,
     autoHeight: { type: Boolean, default: true },
     detailPanel: { type: Boolean, default: false },
@@ -38,6 +39,7 @@ export default class extends Controller {
       userName: this.userNameValue,
       documentId: this.documentIdValue,
       initialPage: this.initialPageValue || 1,
+      initialDestination: this.initialDestinationValue || null,
       initialAnnotation: this.initialAnnotationValue,
       detailPanel: this.detailPanelValue
     })

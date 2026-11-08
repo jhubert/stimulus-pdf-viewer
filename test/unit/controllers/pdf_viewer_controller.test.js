@@ -97,6 +97,26 @@ describe("PdfViewerController", () => {
     it("defaults the initial page to 1", () => {
       expect(viewer.options.initialPage).toBe(1)
     })
+
+    it("has no initial destination unless one is given", () => {
+      expect(viewer.options.initialDestination).toBeNull()
+    })
+
+    it("passes the initial destination and page through", async () => {
+      document.body.insertAdjacentHTML("beforeend", `
+        <div data-controller="pdf-viewer"
+             data-pdf-viewer-document-url-value="/book.pdf"
+             data-pdf-viewer-initial-destination-value="agenda-item-482"
+             data-pdf-viewer-initial-page-value="12">
+          <div data-pdf-viewer-target="container"></div>
+        </div>
+      `)
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      const deepLinked = viewerInstances.at(-1)
+      expect(deepLinked.options.initialDestination).toBe("agenda-item-482")
+      expect(deepLinked.options.initialPage).toBe(12)
+    })
   })
 
   describe("tool selection", () => {

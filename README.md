@@ -142,8 +142,35 @@ The `PdfViewerController` accepts the following Stimulus values:
 | `userName` | String | User name for watermarks |
 | `organizationName` | String | Organization name for watermarks |
 | `initialPage` | Number | Page to open on load (default: 1) |
+| `initialDestination` | String | Named destination in the PDF to open at. Falls back to `initialPage` if the document doesn't define it. See [Linking to a spot in a PDF](#linking-to-a-spot-in-a-pdf) |
 | `initialAnnotation` | String | Annotation ID to highlight on load |
 | `detailPanel` | Boolean | Enable the anchored detail panel for annotations (default: false) |
+
+### Linking to a spot in a PDF
+
+To link from elsewhere in your app to a particular section of a document,
+use a **named destination** rather than a page number. Named destinations are
+anchors stored in the PDF itself. Word, InDesign and LaTeX write them for
+headings and bookmarks, and PDF libraries such as pdf-lib can add them when you
+generate a document. A name stays attached to its section when the document is
+regenerated, while page numbers shift whenever content before them changes.
+
+Pass the name to the viewer from your server, for example from a query
+parameter:
+
+```erb
+<div data-controller="pdf-viewer"
+     data-pdf-viewer-document-url-value="<%= url_for(@document.file) %>"
+     data-pdf-viewer-initial-destination-value="<%= params[:dest] %>"
+     data-pdf-viewer-initial-page-value="<%= params[:page] %>">
+```
+
+If the document has no destination by that name (for example a stale link, or
+an older copy without the anchor), the viewer opens at `initialPage` instead,
+and otherwise at page 1.
+
+Once the viewer is loaded, `pdfViewer.goToDestination(name)` scrolls to a
+destination. It resolves to `false` if the document doesn't define it.
 
 ## Annotations API
 

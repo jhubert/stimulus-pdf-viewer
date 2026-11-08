@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ViewerEvents } from "../../src/lib/core/event_bus.js"
 import { makeCoreViewerClass, makeContainer } from "../helpers/viewer_fixture.js"
 import { highlight, underline, note, ink, freeHighlight, legacyUnderline } from "../helpers/factories.js"
+import { linkedPdfBytes } from "../helpers/pdf.js"
 
 // Swap the PDF.js-backed core viewer for a stand-in that shares a real
 // EventBus, so PdfViewer's own wiring is under test.
@@ -375,6 +376,63 @@ describe("PdfViewer", () => {
       viewer.goToPage(2)
 
       expect(viewer.viewer.goToPage).toHaveBeenCalledWith(2, {})
+    })
+  })
+
+  describe("named destinations", () => {
+    // A real PDF.js document behind the stand-in viewer, so names resolve
+    // exactly as they would in the browser.
+    async function withBook(viewer) {
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
+      const data = await linkedPdfBytes({
+        pages: 3,
+        namedDests: { "agenda-item-482": { page: 3, type: "XYZ", args: [0, 600, null] } }
+      })
+      viewer.viewer.pdfDocument = await pdfjs.getDocument({ data, isEvalSupported: false }).promise
+      viewer.viewer._pageCount = 3
+      viewer.thumbnailSidebar = null
+      return viewer
+    }
+
+    it("scrolls to a named destination and reports the page change", async () => {
+      const { viewer, container } = await makeViewer()
+      await withBook(viewer)
+      const pageChanged = vi.fn()
+      container.addEventListener("pdf-viewer:page-changed", pageChanged)
+
+      expect(await viewer.goToDestination("agenda-item-482")).toBe(true)
+
+      expect(viewer.viewer.goToPage).toHaveBeenCalledWith(3, { point: { x: 0, y: 600 } })
+      expect(pageChanged).toHaveBeenCalled()
+    })
+
+    it("reports a name the document does not define without moving", async () => {
+      const { viewer } = await makeViewer()
+      await withBook(viewer)
+
+      expect(await viewer.goToDestination("agenda-item-999")).toBe(false)
+      expect(viewer.viewer.goToPage).not.toHaveBeenCalled()
+    })
+
+    it("opens at the initial destination", async () => {
+      const { viewer } = await makeViewer({ options: { initialDestination: "agenda-item-482", initialPage: 2 } })
+      await withBook(viewer)
+
+      await viewer.load()
+
+      expect(viewer.viewer.goToPage).toHaveBeenCalledWith(3, { point: { x: 0, y: 600 } })
+      expect(viewer.viewer.goToPage).not.toHaveBeenCalledWith(2)
+    })
+
+    it("falls back to the initial page when the destination is missing", async () => {
+      // A stale link, or an older copy of the document without the anchor
+      const { viewer } = await makeViewer({ options: { initialDestination: "agenda-item-999", initialPage: 2 } })
+      await withBook(viewer)
+
+      await viewer.load()
+
+      expect(viewer.viewer.goToPage).toHaveBeenCalledTimes(1)
+      expect(viewer.viewer.goToPage).toHaveBeenCalledWith(2)
     })
   })
 
