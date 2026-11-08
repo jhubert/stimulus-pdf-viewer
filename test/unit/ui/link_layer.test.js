@@ -194,6 +194,73 @@ describe("LinkLayer", () => {
     })
   })
 
+  describe("borders", () => {
+    // One link per border variant, in this order.
+    const variants = [
+      { name: "borderless", entries: { Border: [0, 0, 0], C: [0, 0, 1] } },
+      { name: "no border entry", entries: { Border: undefined, C: [0, 0, 1] } },
+      { name: "solid red", entries: { Border: [0, 0, 2], C: [1, 0, 0] } },
+      { name: "dashed", entries: { BS: { W: 1, S: "D", D: [3, 2] }, C: [0, 1, 1] } },
+      { name: "underline", entries: { BS: { W: 1, S: "U" }, C: [0, 0, 1] } },
+      { name: "beveled", entries: { BS: { W: 1, S: "B" }, C: [0, 0, 0] } },
+      { name: "rounded", entries: { Border: [4, 6, 1], C: [0, 0, 0] } },
+      { name: "transparent", entries: { Border: [0, 0, 1], C: [] } }
+    ]
+    let links
+
+    beforeAll(async () => {
+      const pdfDocument = await openPdf({
+        links: variants.map(({ entries }, i) => ({ rect: [72, 700 - i * 40, 272, 720 - i * 40], uri: `https://example.com/${i}`, ...entries }))
+      })
+      const linkLayer = new LinkLayer({ viewer: makeViewer(pdfDocument), eventBus: new EventBus() })
+      const { container } = await render(linkLayer, pdfDocument)
+      links = Object.fromEntries(linksIn(container).map((a, i) => [variants[i].name, a]))
+    })
+
+    it("draws none for the borderless links PowerPoint and Word write", () => {
+      expect(links["borderless"].style.borderStyle).toBe("")
+      expect(links["borderless"].classList.contains("pdf-link--bordered")).toBe(false)
+    })
+
+    it("draws none when the link has no /Border or /BS", () => {
+      // The spec's default is a 1pt border, but readers treat a link without
+      // either entry as borderless, as PDF.js does.
+      expect(links["no border entry"].style.borderStyle).toBe("")
+    })
+
+    it("draws the border in the link's /C colour, scaled with the page", () => {
+      const { style } = links["solid red"]
+      expect(style.borderStyle).toBe("solid")
+      expect(style.borderColor).toBe("rgb(255, 0, 0)")
+      expect(style.borderWidth).toBe("calc(2px * var(--display-scale, 1))")
+      expect(links["solid red"].classList.contains("pdf-link--bordered")).toBe(true)
+    })
+
+    it("draws dashed borders dashed", () => {
+      expect(links["dashed"].style.borderStyle).toBe("dashed")
+      expect(links["dashed"].style.borderColor).toBe("rgb(0, 255, 255)")
+    })
+
+    it("draws an underline border along the bottom only", () => {
+      const { style } = links["underline"]
+      expect(style.borderBottomStyle).toBe("solid")
+      expect(style.borderTopStyle).toBe("")
+    })
+
+    it("approximates beveled borders with outset", () => {
+      expect(links["beveled"].style.borderStyle).toBe("outset")
+    })
+
+    it("rounds corners the PDF rounds", () => {
+      expect(links["rounded"].style.borderRadius)
+        .toBe("calc(4px * var(--display-scale, 1)) / calc(6px * var(--display-scale, 1))")
+    })
+
+    it("draws none when /C is empty, which means transparent", () => {
+      expect(links["transparent"].style.borderStyle).toBe("")
+    })
+  })
+
   describe("rotated pages", () => {
     it("places links on the page as it is displayed", async () => {
       // A portrait page with /Rotate 90 displays landscape: its top edge

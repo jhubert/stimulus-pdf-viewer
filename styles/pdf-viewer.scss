@@ -680,18 +680,19 @@
 
 .pdf-link {
   position: absolute;
+  box-sizing: border-box; // A border the PDF specifies is drawn inside the link's rect
   pointer-events: auto;
   cursor: pointer;
-  border-radius: 2px;
   -webkit-user-drag: none;
 
-  &:hover {
-    background-color: rgb(0 100 255 / 0.12);
-  }
-
+  // Like Acrobat and Preview, nothing marks a link beyond what the PDF draws
+  // and the pointer cursor. Keyboard focus does need a visible indicator: a
+  // white ring inside a blue one, so one of the two contrasts with the slide
+  // whether it is light or dark.
   &:focus-visible {
     outline: 2px solid #0060df;
-    outline-offset: 1px;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #fff;
   }
 }
 

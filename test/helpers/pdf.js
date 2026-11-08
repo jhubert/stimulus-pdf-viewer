@@ -75,6 +75,9 @@ function valueToPlain(value, doc) {
  * - `named`: a named action, e.g. "NextPage"
  * - `javascript`: a JavaScript action
  *
+ * Any other keys on a link (`Border`, `BS`, `C`, ...) are copied into its
+ * annotation dictionary as written.
+ *
  * `namedDests` maps names to 1-based pages. `rotate` sets /Rotate on every page.
  */
 export async function linkedPdfBytes({ pages = 1, width = 612, height = 792, rotate = 0, links = [], namedDests = {} } = {}) {
@@ -96,8 +99,8 @@ export async function linkedPdfBytes({ pages = 1, width = 612, height = 792, rot
   }
 
   const annotsByPage = new Map()
-  for (const { page = 1, rect, uri, goTo, namedDest, named, javascript } of links) {
-    const annot = ctx.obj({ Type: "Annot", Subtype: "Link", Rect: rect, Border: [0, 0, 0] })
+  for (const { page = 1, rect, uri, goTo, namedDest, named, javascript, ...entries } of links) {
+    const annot = ctx.obj({ Type: "Annot", Subtype: "Link", Rect: rect, Border: [0, 0, 0], ...entries })
     if (uri !== undefined) {
       annot.set(PDFName.of("A"), ctx.obj({ S: "URI", URI: PDFString.of(uri) }))
     } else if (goTo !== undefined) {

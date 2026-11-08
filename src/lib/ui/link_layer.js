@@ -8,6 +8,10 @@ const ALLOWED_PROTOCOLS = new Set(["http:", "https:", "mailto:"])
 // PDF named actions that move between pages (PDF 32000-1 §12.6.4.11).
 const NAMED_PAGE_ACTIONS = new Set(["NextPage", "PrevPage", "FirstPage", "LastPage"])
 
+// PDF.js AnnotationBorderStyleType -> CSS border-style. Beveled and inset are
+// 3D effects that CSS's outset and inset approximate.
+const BORDER_STYLES = { 1: "solid", 2: "dashed", 3: "outset", 4: "inset", 5: "underline" }
+
 /**
  * LinkLayer - makes the hyperlinks written into a PDF clickable.
  *
@@ -134,7 +138,7 @@ export class LinkLayer {
       const box = this._boxFor(annotation.rect, viewport)
       if (!box) continue
 
-      links.push({ ...target, ...box })
+      links.push({ ...target, ...box, border: this._borderFor(annotation) })
     }
 
     return links
@@ -181,6 +185,52 @@ export class LinkLayer {
     }
   }
 
+  /**
+   * The border the PDF asks to be drawn around the link, as Acrobat draws it,
+   * or null. Follows PDF.js's reading of the dictionary: a link with no
+   * /Border or /BS has width 0, and an empty /C means transparent, so the
+   * borderless links PowerPoint and Word write stay invisible while LaTeX's
+   * boxed links keep their boxes.
+   */
+  _borderFor(annotation) {
+    const { width, style, horizontalCornerRadius = 0, verticalCornerRadius = 0 } = annotation.borderStyle || {}
+    const color = annotation.borderColor || annotation.color
+    if (!(width > 0) || !color || color.length < 3) return null
+
+    const [r, g, b] = Array.from(color, c => c | 0)
+    return {
+      width,
+      style: BORDER_STYLES[style] || "solid",
+      color: `rgb(${r}, ${g}, ${b})`,
+      radius: [horizontalCornerRadius, verticalCornerRadius]
+    }
+  }
+
+  /**
+   * Border measurements are in PDF points, so they scale with --display-scale
+   * like the page does.
+   */
+  _applyBorder(element, border) {
+    const points = (n) => `calc(${n}px * var(--display-scale, 1))`
+    const style = element.style
+
+    if (border.style === "underline") {
+      style.borderBottomWidth = points(border.width)
+      style.borderBottomStyle = "solid"
+      style.borderBottomColor = border.color
+    } else {
+      style.borderWidth = points(border.width)
+      style.borderStyle = border.style
+      style.borderColor = border.color
+    }
+
+    const [horizontal, vertical] = border.radius
+    if (horizontal > 0 || vertical > 0) {
+      style.borderRadius = `${points(horizontal)} / ${points(vertical)}`
+    }
+    element.classList.add("pdf-link--bordered")
+  }
+
   _createLinkElement(link) {
     const a = document.createElement("a")
     a.className = "pdf-link"
@@ -190,6 +240,7 @@ export class LinkLayer {
     a.style.height = `${link.height * 100}%`
     // Dragging a link would otherwise start a link drag rather than nothing.
     a.draggable = false
+    if (link.border) this._applyBorder(a, link.border)
 
     if (link.kind === "external") {
       a.href = link.url
