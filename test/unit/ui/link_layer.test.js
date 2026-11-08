@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
-import { LinkLayer, safeExternalUrl, destinationPoint } from "../../../src/lib/ui/link_layer.js"
+import { LinkLayer, safeExternalUrl } from "../../../src/lib/ui/link_layer.js"
+import { resolveDestination } from "../../../src/lib/core/destinations.js"
 import { EventBus, ViewerEvents } from "../../../src/lib/core/event_bus.js"
 import { linkedPdfBytes } from "../../helpers/pdf.js"
 
@@ -18,6 +19,7 @@ function makeViewer(pdfDocument, { currentPage = 1 } = {}) {
   return {
     pdfDocument,
     goToPage: vi.fn(),
+    resolveDestination: (dest) => resolveDestination(pdfDocument, dest),
     getCurrentPage: vi.fn(() => currentPage),
     getPageCount: vi.fn(() => pdfDocument.numPages)
   }
@@ -512,34 +514,5 @@ describe("safeExternalUrl", () => {
     null
   ])("rejects %s", (url) => {
     expect(safeExternalUrl(url)).toBeNull()
-  })
-})
-
-describe("destinationPoint", () => {
-  const page = { num: 5, gen: 0 }
-
-  it("reads the type from PDF.js's {name} object or a bare string", () => {
-    expect(destinationPoint([page, { name: "FitH" }, 300])).toEqual({ x: null, y: 300 })
-    expect(destinationPoint([page, "FitH", 300])).toEqual({ x: null, y: 300 })
-  })
-
-  it("ignores the zoom an XYZ destination carries", () => {
-    expect(destinationPoint([page, { name: "XYZ" }, 10, 20, 4])).toEqual({ x: 10, y: 20 })
-  })
-
-  it("treats FitB variants like their Fit counterparts", () => {
-    expect(destinationPoint([page, { name: "FitBH" }, 300])).toEqual({ x: null, y: 300 })
-    expect(destinationPoint([page, { name: "FitBV" }, 40])).toEqual({ x: 40, y: null })
-    expect(destinationPoint([page, { name: "FitB" }])).toBeNull()
-  })
-
-  it("names no point when every coordinate is missing or unusable", () => {
-    expect(destinationPoint([page, { name: "XYZ" }, null, null, null])).toBeNull()
-    expect(destinationPoint([page, { name: "FitH" }, NaN])).toBeNull()
-    expect(destinationPoint([page, { name: "FitH" }])).toBeNull()
-  })
-
-  it("names no point for an unknown destination type", () => {
-    expect(destinationPoint([page, { name: "Sideways" }, 1, 2])).toBeNull()
   })
 })

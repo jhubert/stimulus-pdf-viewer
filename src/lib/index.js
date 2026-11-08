@@ -47,6 +47,7 @@ export class PdfViewer {
     this.userName = options.userName
     this.documentId = options.documentId
     this.initialPage = options.initialPage || 1
+    this.initialDestination = options.initialDestination
     this.initialAnnotation = options.initialAnnotation
 
     this.currentTool = null
@@ -373,8 +374,13 @@ export class PdfViewer {
         detail: { annotations, count: annotations.length }
       }))
 
-      // Navigate to initial page if specified
-      if (this.initialPage > 1) {
+      // Open at the initial destination if specified, falling back to the
+      // initial page when the document has no such destination (a stale
+      // link, or an older copy of the document without the anchor)
+      const openedAtDestination = this.initialDestination
+        ? await this.goToDestination(this.initialDestination)
+        : false
+      if (!openedAtDestination && this.initialPage > 1) {
         this.viewer.goToPage(this.initialPage)
       }
 
@@ -481,6 +487,31 @@ export class PdfViewer {
     this.viewer?.goToPage(pageNumber, options)
     // Check and dispatch page change event
     this._checkPageChange()
+  }
+
+  /**
+   * Scroll to a named destination in the PDF (or an explicit destination
+   * array). Named destinations survive the document being regenerated, so
+   * they make better deep links than page numbers.
+   * @param {string|Array} dest
+   * @returns {Promise<boolean>} false when the document has no such destination
+   */
+  async goToDestination(dest) {
+    if (!this.viewer) return false
+    let found = false
+    try {
+      found = await this.viewer.goToDestination(dest)
+    } catch (error) {
+      console.warn("[PdfViewer] Could not resolve destination:", error)
+      return false
+    }
+
+    if (found) {
+      this._checkPageChange()
+    } else {
+      console.warn(`[PdfViewer] No destination ${JSON.stringify(dest)} in this document`)
+    }
+    return found
   }
 
   // Page rendering callbacks

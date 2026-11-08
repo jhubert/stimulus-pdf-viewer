@@ -28,7 +28,7 @@ const BORDER_STYLES = { 1: "solid", 2: "dashed", 3: "outset", 4: "inset", 5: "un
 export class LinkLayer {
   /**
    * @param {Object} options
-   * @param {CoreViewer} options.viewer - Supplies pdfDocument, goToPage and the page count
+   * @param {CoreViewer} options.viewer - Supplies pdfDocument, resolveDestination, goToPage and the page count
    * @param {EventBus} options.eventBus - ANNOTATION_LAYER_RENDERED is dispatched here
    * @param {Function} [options.onGoToPage] - `(pageNumber, { point })` follows an
    *   internal link; defaults to viewer.goToPage
@@ -281,7 +281,7 @@ export class LinkLayer {
     try {
       const target = link.kind === "action"
         ? { pageNumber: this._pageForAction(link.action), point: null }
-        : await this._resolveDest(link.dest)
+        : await this.viewer.resolveDestination(link.dest)
       if (!target?.pageNumber) return
       if (this._onLinkClick({ kind: "internal", pageNumber: target.pageNumber }) === false) return
 
@@ -302,79 +302,6 @@ export class LinkLayer {
       default: return null
     }
   }
-
-  /**
-   * Resolve a destination to a 1-based page number and, where it names one,
-   * the point on that page to bring to the top-left of the view.
-   *
-   * A named destination is looked up in the document. An explicit one is
-   * `[page, {name: type}, ...args]`, where page is a reference or a 0-based
-   * index and the arguments depend on the type (PDF 32000-1 §12.3.2.2).
-   * The zoom some types carry is ignored: following a link should not change
-   * the reader's zoom.
-   *
-   * @returns {Promise<{pageNumber: number, point: {x, y}|null}|null>}
-   */
-  async _resolveDest(dest) {
-    const pdfDocument = this.viewer.pdfDocument
-    if (!pdfDocument) return null
-
-    const explicit = typeof dest === "string" ? await pdfDocument.getDestination(dest) : dest
-    if (!Array.isArray(explicit) || explicit.length === 0) return null
-
-    const target = explicit[0]
-    let pageIndex = null
-    if (Number.isInteger(target)) {
-      pageIndex = target
-    } else if (target && typeof target === "object") {
-      pageIndex = await pdfDocument.getPageIndex(target)
-    }
-
-    if (!Number.isInteger(pageIndex)) return null
-    const pageNumber = pageIndex + 1
-    if (pageNumber < 1 || pageNumber > this.viewer.getPageCount()) return null
-
-    return { pageNumber, point: destinationPoint(explicit) }
-  }
-}
-
-const coordinate = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null)
-
-/**
- * The point an explicit destination asks to be shown at the top-left of the
- * view, or null when it only names the page (Fit, FitB) or nothing usable.
- * @param {Array} explicit - `[page, {name}, ...args]`
- * @returns {{x: number|null, y: number|null}|null}
- */
-export function destinationPoint(explicit) {
-  const type = explicit[1]?.name ?? explicit[1]
-  const args = explicit.slice(2)
-  let x = null
-  let y = null
-
-  switch (type) {
-    case "XYZ":
-      x = coordinate(args[0])
-      y = coordinate(args[1])
-      break
-    case "FitH":
-    case "FitBH":
-      y = coordinate(args[0])
-      break
-    case "FitV":
-    case "FitBV":
-      x = coordinate(args[0])
-      break
-    case "FitR":
-      // left bottom right top: show the rectangle's top-left
-      x = coordinate(args[0])
-      y = coordinate(args[3])
-      break
-    default:
-      return null
-  }
-
-  return x === null && y === null ? null : { x, y }
 }
 
 /**

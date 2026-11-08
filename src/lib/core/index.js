@@ -13,3 +13,4 @@
 export { CoreViewer, ScaleValue } from "./viewer"
 export { EventBus, ViewerEvents } from "./event_bus"
 export { RenderingQueue, RenderingStates } from "./rendering_queue"
+export { resolveDestination, destinationPoint } from "./destinations"

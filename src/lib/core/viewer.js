@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist"
 import { EventBus, ViewerEvents } from "./event_bus"
 import { RenderingQueue, RenderingStates } from "./rendering_queue"
+import { resolveDestination } from "./destinations"
 
 // Configure PDF.js worker from meta tag (set by Rails asset pipeline for cache busting)
 const workerSrcMeta = document.querySelector('meta[name="pdf-worker-src"]')
@@ -840,6 +841,29 @@ export class CoreViewer {
     })
 
     this.eventBus.dispatch(ViewerEvents.PAGE_CHANGING, { pageNumber })
+  }
+
+  /**
+   * Resolve a destination in the loaded document to a page and point.
+   * @param {string|Array} dest - A destination name or an explicit destination
+   * @returns {Promise<{pageNumber: number, point: Object|null}|null>}
+   */
+  resolveDestination(dest) {
+    return resolveDestination(this.pdfDocument, dest)
+  }
+
+  /**
+   * Scroll to a destination: a named anchor in the PDF (as Word, InDesign or
+   * LaTeX write for headings and bookmarks) or an explicit destination array.
+   * @param {string|Array} dest
+   * @returns {Promise<boolean>} false when the document has no such destination
+   */
+  async goToDestination(dest) {
+    const target = await this.resolveDestination(dest)
+    if (!target) return false
+
+    await this.goToPage(target.pageNumber, target.point ? { point: target.point } : {})
+    return true
   }
 
   /**
