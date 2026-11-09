@@ -238,9 +238,19 @@ describe("InkTool", () => {
       host.annotationManager.createAnnotation = vi.fn(async () => { throw new Error("save failed") })
       stageStroke(tool, [{ x: 150, y: 100 }])
 
-      await expect(tool._savePendingStrokes()).rejects.toThrow("save failed")
+      await tool._savePendingStrokes()
 
       expect(host.page.querySelector(".ink-temp-stroke")).toBeNull()
+    })
+
+    it("does not reject when the save fails, since the manager reports it", async () => {
+      // Every caller fires the save without waiting on it, so a rejection here
+      // surfaced as an unhandled promise rejection on top of the viewer's own
+      // "Failed to save annotation" error.
+      host.annotationManager.createAnnotation = vi.fn(async () => { throw new Error("save failed") })
+      stageStroke(tool, [{ x: 150, y: 100 }])
+
+      await expect(tool._savePendingStrokes()).resolves.toBeUndefined()
     })
 
     it("empties the pending batch after saving", async () => {
@@ -310,6 +320,30 @@ describe("InkTool", () => {
 
       tool.deactivate()
       await vi.advanceTimersByTimeAsync(0)
+
+      expect(host.annotationManager.createAnnotation).toHaveBeenCalledOnce()
+    })
+
+    it("saves pending strokes when destroyed, so leaving the page keeps the ink", () => {
+      // Regression: destroy() emptied the batch before deactivating, so the
+      // flush in onDeactivate found nothing and up to two seconds of ink was
+      // dropped when the reader navigated away mid-batch.
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }])
+
+      tool.destroy()
+
+      expect(host.annotationManager.createAnnotation).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1, annotation_type: "ink" })
+      )
+    })
+
+    it("does not save the batch again when the timer would have fired", async () => {
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }])
+
+      tool.destroy()
+      await vi.advanceTimersByTimeAsync(5000)
 
       expect(host.annotationManager.createAnnotation).toHaveBeenCalledOnce()
     })

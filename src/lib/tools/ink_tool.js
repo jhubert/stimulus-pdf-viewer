@@ -313,6 +313,11 @@ export class InkTool extends BaseTool {
         color: color,
         subject: "Free Hand"
       })
+    } catch {
+      // The annotation manager has already reported the failure to the reader
+      // (pdf-viewer:error). Callers fire this from a timer, a pointerdown and
+      // teardown without waiting on it, so rethrowing only adds an unhandled
+      // rejection on top of the message they have already seen.
     } finally {
       // Always remove the temp preview elements, even if the save failed —
       // otherwise they're orphaned in the DOM with no remaining reference.
@@ -330,21 +335,5 @@ export class InkTool extends BaseTool {
       this.drawingCanvas.remove()
       this.drawingCanvas = null
     }
-  }
-
-  destroy() {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout)
-      this.saveTimeout = null
-    }
-    // Remove any temp elements
-    for (const stroke of this.pendingStrokes) {
-      if (stroke.tempElement) {
-        stroke.tempElement.remove()
-      }
-    }
-    this.pendingStrokes = []
-    this._cleanupCurrentStroke()
-    super.destroy()
   }
 }
