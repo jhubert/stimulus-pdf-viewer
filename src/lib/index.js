@@ -1472,6 +1472,10 @@ export class PdfViewer {
       this._sendTrackingUpdate()
     }
 
+    // Tools first: deactivating one calls back into the UI below (the ink
+    // tool restores the colour picker), so that UI must still exist.
+    Object.values(this.tools || {}).forEach(tool => tool.destroy?.())
+
     // Optional-chain every component: _initializeComponents() can bail out
     // early (e.g. missing .pdf-pages-container), leaving these undefined, and
     // destroy() must still tear down whatever did get created.
@@ -1486,8 +1490,6 @@ export class PdfViewer {
     this.colorPicker?.destroy()
     this.passwordPrompt?.destroy()
     this.linkLayer?.destroy()
-
-    Object.values(this.tools || {}).forEach(tool => tool.destroy?.())
 
     // Clean up the shared announcer
     destroyAnnouncer()

@@ -152,6 +152,12 @@ describe("ColorPicker", () => {
       expect(() => document.body.click()).not.toThrow()
     })
 
+    it("ignores a colour set after it is gone", () => {
+      picker.destroy()
+
+      expect(() => picker.setColor("#FF0000")).not.toThrow()
+    })
+
     it("is safe to call twice", () => {
       picker.destroy()
 
