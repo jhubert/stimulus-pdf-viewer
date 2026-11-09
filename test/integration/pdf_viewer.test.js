@@ -552,6 +552,20 @@ describe("PdfViewer", () => {
       second.viewer.destroy()
     })
 
+    it("tears down cleanly with the draw tool active", async () => {
+      const { viewer } = await makeViewer()
+      viewer.setTool(ToolMode.INK)
+      const ink = viewer.tools[ToolMode.INK]
+      const onDeactivate = vi.spyOn(ink, "onDeactivate")
+
+      viewer.destroy()
+
+      for (const result of onDeactivate.mock.results) {
+        await expect(result.value).resolves.toBeUndefined()
+      }
+      expect(onDeactivate).toHaveBeenCalled()
+    })
+
     it("detaches its container listeners", async () => {
       const { viewer, container } = await makeViewer({ annotations: [note({ page: 1 })] })
       renderPage(viewer)
