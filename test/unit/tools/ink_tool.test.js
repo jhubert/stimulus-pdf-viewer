@@ -238,9 +238,19 @@ describe("InkTool", () => {
       host.annotationManager.createAnnotation = vi.fn(async () => { throw new Error("save failed") })
       stageStroke(tool, [{ x: 150, y: 100 }])
 
-      await expect(tool._savePendingStrokes()).rejects.toThrow("save failed")
+      await tool._savePendingStrokes()
 
       expect(host.page.querySelector(".ink-temp-stroke")).toBeNull()
+    })
+
+    it("does not reject when the save fails, since the manager reports it", async () => {
+      // Every caller fires the save without waiting on it, so a rejection here
+      // surfaced as an unhandled promise rejection on top of the viewer's own
+      // "Failed to save annotation" error.
+      host.annotationManager.createAnnotation = vi.fn(async () => { throw new Error("save failed") })
+      stageStroke(tool, [{ x: 150, y: 100 }])
+
+      await expect(tool._savePendingStrokes()).resolves.toBeUndefined()
     })
 
     it("empties the pending batch after saving", async () => {
