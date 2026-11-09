@@ -336,20 +336,4 @@ export class InkTool extends BaseTool {
       this.drawingCanvas = null
     }
   }
-
-  destroy() {
-    if (this.saveTimeout) {
-      clearTimeout(this.saveTimeout)
-      this.saveTimeout = null
-    }
-    // Remove any temp elements
-    for (const stroke of this.pendingStrokes) {
-      if (stroke.tempElement) {
-        stroke.tempElement.remove()
-      }
-    }
-    this.pendingStrokes = []
-    this._cleanupCurrentStroke()
-    super.destroy()
-  }
 }

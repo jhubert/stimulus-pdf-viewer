@@ -324,6 +324,30 @@ describe("InkTool", () => {
       expect(host.annotationManager.createAnnotation).toHaveBeenCalledOnce()
     })
 
+    it("saves pending strokes when destroyed, so leaving the page keeps the ink", () => {
+      // Regression: destroy() emptied the batch before deactivating, so the
+      // flush in onDeactivate found nothing and up to two seconds of ink was
+      // dropped when the reader navigated away mid-batch.
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }])
+
+      tool.destroy()
+
+      expect(host.annotationManager.createAnnotation).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1, annotation_type: "ink" })
+      )
+    })
+
+    it("does not save the batch again when the timer would have fired", async () => {
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }])
+
+      tool.destroy()
+      await vi.advanceTimersByTimeAsync(5000)
+
+      expect(host.annotationManager.createAnnotation).toHaveBeenCalledOnce()
+    })
+
     it("does not throw when destroyed mid-stroke", () => {
       tool.activate()
       stageStroke(tool, [{ x: 150, y: 100 }])
