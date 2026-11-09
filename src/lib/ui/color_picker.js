@@ -93,6 +93,9 @@ export class ColorPicker {
   setColor(color) {
     this.currentColor = color
 
+    // Destroyed: there is no swatch to update and nobody left to notify
+    if (!this.element) return
+
     // Update toggle swatch
     const toggleSwatch = this.element.querySelector(".color-picker-toggle .color-picker-swatch")
     toggleSwatch.style.backgroundColor = color

@@ -40,17 +40,19 @@ export class InkTool extends BaseTool {
     // Remember draw tool's current color before switching away
     this.inkColor = this.pdfViewer.colorPicker.currentColor
 
-    // Save any pending strokes immediately
-    await this._savePendingStrokes()
-
-    // Clean up any in-progress drawing
-    this._cleanupCurrentStroke()
-
-    // Restore previous color when leaving draw mode
+    // Restore previous color when leaving draw mode. Do this before the save
+    // below: by the time the save settles the next tool may have set its own
+    // colour, or the viewer may have been destroyed along with the picker.
     if (this.previousColor) {
       this.pdfViewer.colorPicker.setColor(this.previousColor)
       this.previousColor = null
     }
+
+    // Clean up any in-progress drawing
+    this._cleanupCurrentStroke()
+
+    // Save any pending strokes immediately
+    await this._savePendingStrokes()
   }
 
   _addTouchListeners() {
@@ -83,7 +85,7 @@ export class InkTool extends BaseTool {
     }
   }
 
-  async onPointerDown(event) {
+  onPointerDown(event) {
     // Find which page we're on
     const pageContainer = event.target.closest(".pdf-page")
     if (!pageContainer) return
@@ -93,9 +95,12 @@ export class InkTool extends BaseTool {
 
     const pageNumber = parseInt(pageContainer.dataset.pageNumber, 10)
 
-    // If drawing on a different page, save pending strokes first
+    // If drawing on a different page, save the previous page's strokes. Don't
+    // wait for the save: setPointerCapture below only works while the pointer
+    // is still down, and a quick pen stroke can lift before a request returns.
+    // The batch is handed off synchronously, so the new stroke starts clean.
     if (this.pendingStrokes.length > 0 && this.pendingPageNumber !== pageNumber) {
-      await this._savePendingStrokes()
+      this._savePendingStrokes()
     }
 
     this.currentPageNumber = pageNumber

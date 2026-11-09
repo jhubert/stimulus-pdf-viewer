@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Starting a pen stroke on another page within two seconds of drawing on the previous one no longer throws `NotFoundError` from `setPointerCapture`. The ink tool waited for the previous page's strokes to save before capturing the pointer, and a quick Apple Pencil stroke had lifted by then, so the capture failed and the new stroke started in a broken state. The save is now handed off without waiting.
+- Leaving the draw tool no longer throws `TypeError: null is not an object (evaluating 'this.element.querySelector')` when the viewer is torn down while the last strokes are saving. The tool restored the previous colour only after the save returned, by which point the colour picker could be gone; it now restores it straight away, which also stops a slow save from overwriting the colour the next tool chose. `ColorPicker#setColor` is a no-op after `destroy()`.
+
 ## [0.7.0] - 2026-11-07
 
 ### Fixed

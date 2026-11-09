@@ -85,6 +85,31 @@ describe("InkTool", () => {
       expect(host.colorPicker.currentColor).toBe("#FFA500")
     })
 
+    it("restores the previous colour without waiting for the pending save", () => {
+      host.annotationManager.createAnnotation = vi.fn(() => new Promise(() => {}))
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }, { x: 160, y: 110 }])
+
+      tool.deactivate()
+
+      expect(host.colorPicker.currentColor).toBe("#FFA500")
+    })
+
+    it("leaves the picker alone once the save settles", async () => {
+      let settle
+      host.annotationManager.createAnnotation = vi.fn(() => new Promise((resolve) => { settle = resolve }))
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }, { x: 160, y: 110 }])
+      const deactivating = tool.onDeactivate()
+
+      // The viewer is torn down while the save is in flight
+      host.colorPicker.setColor = vi.fn(() => { throw new TypeError("picker destroyed") })
+      settle({ id: 1 })
+
+      await expect(deactivating).resolves.toBeUndefined()
+      expect(host.colorPicker.setColor).not.toHaveBeenCalled()
+    })
+
     it("remembers the ink colour across activations", async () => {
       tool.activate()
       host.colorPicker.currentColor = "#FF0000"
@@ -240,6 +265,42 @@ describe("InkTool", () => {
       await tool._savePendingStrokes()
 
       expect(host.annotationManager.createAnnotation).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe("starting a stroke on another page", () => {
+    let page2
+
+    beforeEach(() => {
+      page2 = document.createElement("div")
+      page2.className = "pdf-page"
+      page2.dataset.pageNumber = "2"
+      page2.setPointerCapture = vi.fn()
+      host.pagesContainer.appendChild(page2)
+      host.viewer.getPageContainer = vi.fn((n) => ({ 1: host.page, 2: page2 })[n] || null)
+      host.annotationManager.createAnnotation = vi.fn(() => new Promise(() => {}))
+      tool.activate()
+      stageStroke(tool, [{ x: 150, y: 100 }, { x: 160, y: 110 }])
+    })
+
+    const pointerDown = () => ({
+      target: page2, pointerId: 7, clientX: 200, clientY: 300, preventDefault: vi.fn()
+    })
+
+    it("captures the pointer while it is still down, not after the save", () => {
+      tool.onPointerDown(pointerDown())
+
+      expect(page2.setPointerCapture).toHaveBeenCalledWith(7)
+      expect(tool.isDrawing).toBe(true)
+    })
+
+    it("still saves the previous page's strokes", () => {
+      tool.onPointerDown(pointerDown())
+
+      expect(host.annotationManager.createAnnotation).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1 })
+      )
+      expect(tool.pendingStrokes).toEqual([])
     })
   })
 
