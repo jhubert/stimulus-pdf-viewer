@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { ColorPicker } from "../../../src/lib/ui/color_picker.js"
+import { stubRect } from "../../helpers/dom.js"
 
 describe("ColorPicker", () => {
   let picker, container, onChange
@@ -162,6 +163,72 @@ describe("ColorPicker", () => {
       picker.destroy()
 
       expect(() => picker.destroy()).not.toThrow()
+    })
+  })
+
+  describe("staying within reach", () => {
+    // jsdom has no layout, so give the dropdown and its surroundings boxes
+    function place({ dropdownLeft, dropdownWidth = 170, windowWidth = 1000, clip = null }) {
+      stubRect(dropdown(), { left: dropdownLeft, width: dropdownWidth, height: 40 })
+      Object.defineProperty(document.documentElement, "clientWidth", { value: windowWidth, configurable: true })
+      if (clip) {
+        container.style.overflowX = "hidden" // jsdom does not expand the overflow shorthand
+        stubRect(container, clip)
+      }
+    }
+
+    it("leaves the dropdown alone when it fits", () => {
+      place({ dropdownLeft: 100 })
+
+      toggle().click()
+
+      expect(dropdown().style.transform).toBe("")
+    })
+
+    it("slides left when it would run past the viewer's clipped edge", () => {
+      // Regression: with the picker near the right of the toolbar, the last
+      // colours were cut off by the viewer's overflow and couldn't be clicked.
+      place({ dropdownLeft: 200, clip: { left: 0, width: 335 } })
+
+      toggle().click()
+
+      // Right edge 370 must come back to 335 - 8
+      expect(dropdown().style.transform).toBe("translateX(-43px)")
+    })
+
+    it("slides left when it would run past the window", () => {
+      place({ dropdownLeft: 900, windowWidth: 1000 })
+
+      toggle().click()
+
+      expect(dropdown().style.transform).toBe("translateX(-78px)")
+    })
+
+    it("slides right when it starts before the left edge", () => {
+      place({ dropdownLeft: -30 })
+
+      toggle().click()
+
+      expect(dropdown().style.transform).toBe("translateX(38px)")
+    })
+
+    it("shows the start of the row when the space is narrower than the dropdown", () => {
+      place({ dropdownLeft: 40, clip: { left: 0, width: 120 } })
+
+      toggle().click()
+
+      expect(dropdown().style.transform).toBe("translateX(-32px)")
+    })
+
+    it("measures afresh each time it opens", () => {
+      place({ dropdownLeft: 900 })
+      toggle().click()
+      toggle().click()
+
+      place({ dropdownLeft: 100 })
+      toggle().click()
+
+      expect(dropdown().style.transform).toBe("")
     })
   })
 })

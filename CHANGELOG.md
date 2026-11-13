@@ -17,6 +17,7 @@
 - Undo now works with the in-memory store, which is what the viewer uses when no `annotationsUrl` or store is given. `MemoryAnnotationStore#restore` returned `null`, so Undo did nothing. The viewer also no longer announces "restored" when a store could not restore.
 - A failed delete, undo, note edit, or new highlight, underline or note no longer also raises an unhandled promise rejection. As with ink saves, the viewer already reports these as `pdf-viewer:error`. A note that fails to save now keeps its dialog open, so the text isn't lost.
 - Changing the colour of a pen drawing no longer makes it 40% translucent when the store returns no `opacity` (as the in-memory store doesn't). Every `ink` record was given the highlighter's default; only freehand highlights are now.
+- The colour picker's dropdown no longer runs off the edge of the viewer. It opens aligned to its toggle, and with the toggle near the right of the toolbar the last colours were clipped by the viewer and could not be clicked. The dropdown now slides sideways just far enough to stay inside the window and the viewer.
 
 ### Changed
 - A failure to load annotations no longer fails `PdfViewer#load`. The document had already rendered, but the controller covered it with "Failed to load PDF document" and no tool was activated. The document now stays readable and the failure is reported as `pdf-viewer:error` (the "Failed to load annotations" toast), as before. A host that relied on `load()` rejecting should listen for that event.

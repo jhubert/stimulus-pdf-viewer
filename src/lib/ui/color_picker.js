@@ -1,5 +1,8 @@
 import { Icons } from "./icons"
 
+// Gap to keep between the dropdown and the edge it would otherwise cross (px)
+const EDGE_MARGIN = 8
+
 export class ColorPicker {
   static COLORS = [
     { name: "Orange", value: "#FFA500" },
@@ -61,6 +64,7 @@ export class ColorPicker {
       this.isOpen = !this.isOpen
       dropdown.classList.toggle("hidden", !this.isOpen)
       toggle.setAttribute("aria-expanded", this.isOpen)
+      if (this.isOpen) this._keepDropdownInView()
     })
 
     // Color selection
@@ -80,6 +84,49 @@ export class ColorPicker {
       }
     }
     document.addEventListener("click", this._documentClickHandler)
+  }
+
+  /**
+   * Slide the open dropdown sideways so every swatch can be reached.
+   *
+   * It opens aligned to the toggle, and the toggle can sit anywhere in the
+   * host's toolbar. Near the right edge the dropdown ran past the viewer,
+   * which clips its overflow, leaving the last colours cut off and unclickable.
+   */
+  _keepDropdownInView() {
+    const dropdown = this.element.querySelector(".color-picker-dropdown")
+
+    // Measure where the stylesheet puts it, without a previous shift
+    dropdown.style.transform = ""
+    const rect = dropdown.getBoundingClientRect()
+    const { left, right } = this._visibleBounds()
+
+    // Prefer showing the start of the row if it can't all fit
+    let shift = Math.min(0, right - EDGE_MARGIN - rect.right)
+    shift = Math.max(shift, left + EDGE_MARGIN - rect.left)
+
+    if (Math.abs(shift) >= 1) {
+      dropdown.style.transform = `translateX(${Math.round(shift)}px)`
+    }
+  }
+
+  /**
+   * The horizontal extent the dropdown can be seen in: the window, narrowed
+   * by any ancestor that clips its overflow (the viewer's container does).
+   */
+  _visibleBounds() {
+    let left = 0
+    let right = document.documentElement.clientWidth || window.innerWidth
+
+    for (let node = this.element.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+      if (getComputedStyle(node).overflowX === "visible") continue
+
+      const rect = node.getBoundingClientRect()
+      left = Math.max(left, rect.left)
+      right = Math.min(right, rect.right)
+    }
+
+    return { left, right }
   }
 
   _closeDropdown() {
