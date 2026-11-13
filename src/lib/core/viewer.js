@@ -127,6 +127,10 @@ export class CoreViewer {
     try {
       return await this._loadDocument(url)
     } catch (error) {
+      // destroy() aborts a load in progress, which rejects here. Retrying
+      // would fetch the whole file and build a document nothing will release.
+      if (this._destroyed) throw error
+
       if (typeof url === "string" && this._shouldRetryAsBlob(error)) {
         console.warn("PDF streamed load failed, retrying as full fetch:", error)
         try {
@@ -1178,6 +1182,8 @@ export class CoreViewer {
   }
 
   destroy() {
+    this._destroyed = true
+
     // Remove every listener registered with the abort signal (scroll, pinch,
     // per-text-layer, and the global document/window selection listeners).
     this._abortController.abort()

@@ -5,6 +5,9 @@ import { Application } from "@hotwired/stimulus"
 // these tests cover the controller's own logic without loading PDF.js.
 const viewerInstances = []
 
+// What the stubbed viewer's load() does; tests swap it to control the outcome
+const loadImpl = { current: async () => {} }
+
 const ToolMode = {
   SELECT: "select", HIGHLIGHT: "highlight", UNDERLINE: "underline", NOTE: "note", INK: "ink"
 }
@@ -18,7 +21,7 @@ vi.mock("../../../src/lib/index.js", () => ({
       this.currentMode = ToolMode.SELECT
       this.viewer = { setScale: vi.fn(), destroy: vi.fn() }
       this.downloadManager = { setDownloadBridge: vi.fn() }
-      this.load = vi.fn(async () => {})
+      this.load = vi.fn(() => loadImpl.current())
       this.destroy = vi.fn()
       this.setTool = vi.fn((mode) => { this.currentMode = mode })
       this.getScale = vi.fn(() => 1)
@@ -81,6 +84,7 @@ describe("PdfViewerController", () => {
   })
 
   afterEach(() => {
+    loadImpl.current = async () => {}
     application?.stop()
   })
 
@@ -362,6 +366,44 @@ describe("PdfViewerController", () => {
 
       expect(() => ctrl._handleLoadFailure(new Error("boom"))).not.toThrow()
       app.stop()
+    })
+  })
+
+  describe("disconnecting while the document loads", () => {
+    async function connectWithPendingLoad() {
+      let fail
+      loadImpl.current = () => new Promise((_, reject) => { fail = reject })
+      document.body.innerHTML = `
+        <div data-controller="pdf-viewer" data-pdf-viewer-document-url-value="/slow.pdf">
+          <div data-pdf-viewer-target="container"></div>
+        </div>`
+      await new Promise(resolve => setTimeout(resolve, 0))
+      const el = document.querySelector('[data-controller="pdf-viewer"]')
+      return { el, container: el.querySelector('[data-pdf-viewer-target="container"]'), fail: (e) => fail(e) }
+    }
+
+    it("shows no error for a load the teardown aborted", async () => {
+      // Regression: a Turbo visit away mid-load left "Failed to load PDF
+      // document" on the element and reported pdf-viewer:load-failed.
+      const { el, container, fail } = await connectWithPendingLoad()
+      const onFailed = vi.fn()
+      container.addEventListener("pdf-viewer:load-failed", onFailed)
+
+      application.getControllerForElementAndIdentifier(el, "pdf-viewer").disconnect()
+      fail(new Error("Loading aborted"))
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(container.querySelector(".pdf-viewer-error")).toBeNull()
+      expect(onFailed).not.toHaveBeenCalled()
+    })
+
+    it("still reports a load that fails while connected", async () => {
+      const { container, fail } = await connectWithPendingLoad()
+
+      fail(new Error("HTTP 404"))
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(container.querySelector(".pdf-viewer-error")).toBeTruthy()
     })
   })
 

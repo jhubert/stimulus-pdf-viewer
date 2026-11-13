@@ -206,6 +206,27 @@ describe("CoreViewer", () => {
       expect(viewer.pdfDocument).toBe(pdfDocument)
     })
 
+    it("does not retry a load that destroy() aborted", async () => {
+      // Regression: the abort rejected like a network error, so the viewer
+      // fetched the whole file and built a document nothing would release.
+      let abort
+      pdfjsMock.getDocument = vi.fn(() => ({
+        promise: new Promise((_, reject) => { abort = reject }),
+        destroy: vi.fn(async () => abort(new Error("Loading aborted"))),
+        onPassword: null
+      }))
+      vi.stubGlobal("fetch", vi.fn())
+
+      const viewer = new CoreViewer(container)
+      const loading = viewer.load("/doc.pdf")
+      await vi.waitFor(() => expect(abort).toBeTypeOf("function"))
+      viewer.destroy()
+
+      await expect(loading).rejects.toThrow("Loading aborted")
+      expect(global.fetch).not.toHaveBeenCalled()
+      expect(pdfjsMock.getDocument).toHaveBeenCalledOnce()
+    })
+
     it("does not retry a password failure, where a new transport cannot help", async () => {
       rejectWith(Object.assign(new Error("No password given"), { name: "PasswordException" }))
       vi.stubGlobal("fetch", vi.fn())

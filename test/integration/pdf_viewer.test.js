@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { ViewerEvents } from "../../src/lib/core/event_bus.js"
 import { makeCoreViewerClass, makeContainer } from "../helpers/viewer_fixture.js"
 import { highlight, underline, note, ink, freeHighlight, legacyUnderline } from "../helpers/factories.js"
@@ -573,6 +573,172 @@ describe("PdfViewer", () => {
       viewer.destroy()
 
       expect(() => container.querySelector(".pdf-pages-container").click()).not.toThrow()
+    })
+  })
+
+
+  describe("loading", () => {
+    function deferred() {
+      let resolve, reject
+      const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+      return { promise, resolve, reject }
+    }
+
+    it("keeps the document readable when its annotations fail to load", async () => {
+      const { viewer, container, store } = await makeViewer()
+      viewer.thumbnailSidebar = null // The stand-in document has no pages to draw
+      store.load = vi.fn(async () => { throw new Error("HTTP 500") })
+      const onError = vi.fn()
+      container.addEventListener("pdf-viewer:user-error", onError)
+
+      await expect(viewer.load()).resolves.toBeUndefined()
+
+      expect(onError).toHaveBeenCalledOnce()
+      expect(onError.mock.calls[0][0].detail.message).toBe("Failed to load annotations")
+      expect(viewer.currentTool).toBe(viewer.tools[ToolMode.SELECT])
+      viewer.destroy()
+    })
+
+    it("still fails when the document itself can't be loaded", async () => {
+      const { viewer } = await makeViewer()
+      viewer.viewer.load = vi.fn(async () => { throw new Error("Missing PDF") })
+
+      await expect(viewer.load()).rejects.toThrow("Missing PDF")
+    })
+
+    it("stops quietly when destroyed while the document is loading", async () => {
+      // destroy() aborts the PDF.js load, which rejects. That is a teardown,
+      // not a failure for the host to report.
+      const { viewer } = await makeViewer()
+      const loading = deferred()
+      viewer.viewer.load = vi.fn(() => loading.promise)
+      const result = viewer.load()
+
+      viewer.destroy()
+      loading.reject(new Error("Loading aborted"))
+
+      await expect(result).resolves.toBeUndefined()
+    })
+
+    it("does not start tools or tracking when destroyed while annotations load", async () => {
+      // Regression: load() carried on after destroy() and started a 30s
+      // heartbeat that nothing would ever clear.
+      vi.useFakeTimers()
+      const fetchMock = vi.fn(async () => ({}))
+      vi.stubGlobal("fetch", fetchMock)
+      try {
+        const { viewer, store } = await makeViewer({ options: { trackingUrl: "/track" } })
+        viewer.thumbnailSidebar = null
+        const loading = deferred()
+        store.load = vi.fn(() => loading.promise)
+        const result = viewer.load()
+        await vi.advanceTimersByTimeAsync(0)
+
+        viewer.destroy()
+        loading.resolve([])
+        await result
+        await vi.advanceTimersByTimeAsync(120000)
+
+        expect(viewer.currentTool).toBeNull()
+        expect(fetchMock).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+        vi.unstubAllGlobals()
+      }
+    })
+  })
+
+  describe("time tracking", () => {
+    let fetchMock
+
+    function setHidden(hidden) {
+      Object.defineProperty(document, "hidden", { value: hidden, configurable: true })
+      document.dispatchEvent(new Event("visibilitychange"))
+    }
+
+    const reported = () => fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).time_spent)
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      fetchMock = vi.fn(async () => ({}))
+      vi.stubGlobal("fetch", fetchMock)
+    })
+
+    afterEach(() => {
+      Object.defineProperty(document, "hidden", { value: false, configurable: true })
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    })
+
+    async function tracked() {
+      const { viewer } = await makeViewer({ options: { trackingUrl: "/track" } })
+      viewer.thumbnailSidebar = null // The stand-in document has no pages to draw
+      await viewer.load()
+      return viewer
+    }
+
+    it("reports time every 30 seconds while the document is visible", async () => {
+      const viewer = await tracked()
+
+      await vi.advanceTimersByTimeAsync(60000)
+
+      expect(reported()).toEqual([30, 30])
+      viewer.destroy()
+    })
+
+    it("does not count time while the tab is hidden", async () => {
+      // Regression: the heartbeat kept running in the background and reported
+      // the hidden time as time spent reading.
+      const viewer = await tracked()
+      await vi.advanceTimersByTimeAsync(10000)
+
+      setHidden(true)
+      await vi.advanceTimersByTimeAsync(300000)
+
+      expect(reported()).toEqual([10])
+      viewer.destroy()
+    })
+
+    it("picks the clock back up when the tab is shown again", async () => {
+      const viewer = await tracked()
+      setHidden(true)
+      await vi.advanceTimersByTimeAsync(300000)
+
+      setHidden(false)
+      await vi.advanceTimersByTimeAsync(30000)
+
+      expect(reported()).toEqual([0, 30])
+      viewer.destroy()
+    })
+
+    it("reports the remainder on destroy and then stops", async () => {
+      const viewer = await tracked()
+      await vi.advanceTimersByTimeAsync(12000)
+
+      viewer.destroy()
+      await vi.advanceTimersByTimeAsync(120000)
+
+      expect(reported()).toEqual([12])
+    })
+
+    it("reports nothing more on destroy while hidden", async () => {
+      const viewer = await tracked()
+      setHidden(true)
+      await vi.advanceTimersByTimeAsync(50000)
+
+      viewer.destroy()
+
+      expect(reported()).toEqual([0])
+    })
+
+    it("sends updates that can outlive the page, without a blank CSRF header", async () => {
+      const viewer = await tracked()
+
+      viewer.destroy()
+
+      const [, init] = fetchMock.mock.calls[0]
+      expect(init.keepalive).toBe(true)
+      expect(init.headers).not.toHaveProperty("X-CSRF-Token")
     })
   })
 })

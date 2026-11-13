@@ -65,6 +65,10 @@ export class PdfViewer {
     // otherwise leak the viewer across reconnects.
     this._abortController = new AbortController()
 
+    // Set by destroy(). load() is async and can still be waiting on the
+    // document or its annotations when the host tears the viewer down.
+    this._destroyed = false
+
     // Take a reference on the shared announcer; released in destroy(). Done
     // unconditionally (even if _initializeComponents bails early) so it stays
     // balanced with the destroyAnnouncer() call in destroy().
@@ -350,6 +354,7 @@ export class PdfViewer {
     try {
       // Load the PDF document
       await this.viewer.load(this.documentUrl)
+      if (this._destroyed) return
 
       // Initialize find controller with the loaded document
       if (this.findController && this.viewer.pdfDocument) {
@@ -359,12 +364,19 @@ export class PdfViewer {
       // Initialize thumbnail sidebar with the loaded document
       if (this.thumbnailSidebar && this.viewer.pdfDocument) {
         await this.thumbnailSidebar.setDocument(this.viewer.pdfDocument)
+        if (this._destroyed) return
       }
 
       // Load existing annotations from store and render them on all rendered
       // pages. Skipped for encrypted documents, which are view-only.
       if (!this.readOnly) {
-        await this.annotationManager.loadAnnotations()
+        try {
+          await this.annotationManager.loadAnnotations()
+        } catch {
+          // The document itself is fine, so keep it readable. The manager has
+          // already reported the failure to the reader (pdf-viewer:error).
+        }
+        if (this._destroyed) return
         this._renderAnnotations()
       }
 
@@ -380,6 +392,7 @@ export class PdfViewer {
       const openedAtDestination = this.initialDestination
         ? await this.goToDestination(this.initialDestination)
         : false
+      if (this._destroyed) return
       if (!openedAtDestination && this.initialPage > 1) {
         this.viewer.goToPage(this.initialPage)
       }
@@ -396,6 +409,10 @@ export class PdfViewer {
       // Start time tracking
       this._startTracking()
     } catch (error) {
+      // Tearing the viewer down aborts a load in progress; that is not a
+      // failure to report
+      if (this._destroyed) return
+
       console.error("Failed to load PDF viewer:", error)
       throw error
     }
@@ -1413,20 +1430,29 @@ export class PdfViewer {
 
   // Time tracking
   _startTracking() {
+    this._trackingStarted = true
+    // A document opened in a background tab isn't being read yet
+    if (!document.hidden) this._resumeTracking()
+  }
+
+  // Stop the clock while the tab is hidden. The heartbeat has to stop too:
+  // timers keep firing in a background tab, and each beat would report the
+  // time since the last one as time spent reading.
+  _pauseTracking() {
+    if (!this._trackingInterval) return
+
+    clearInterval(this._trackingInterval)
+    this._trackingInterval = null
+    this._sendTrackingUpdate()
+  }
+
+  _resumeTracking() {
+    if (!this._trackingStarted || this._trackingInterval) return
+
     this._trackingStartTime = Date.now()
     this._trackingInterval = setInterval(() => {
       this._sendTrackingUpdate()
     }, 30000) // 30 second heartbeat
-  }
-
-  _pauseTracking() {
-    if (this._trackingInterval) {
-      this._sendTrackingUpdate()
-    }
-  }
-
-  _resumeTracking() {
-    this._trackingStartTime = Date.now()
   }
 
   _sendTrackingUpdate() {
@@ -1435,13 +1461,16 @@ export class PdfViewer {
     const timeSpent = Math.floor((Date.now() - this._trackingStartTime) / 1000)
     this._trackingStartTime = Date.now()
 
+    const headers = { "Content-Type": "application/json" }
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+    if (csrfToken) headers["X-CSRF-Token"] = csrfToken
+
     fetch(this.trackingUrl, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content
-      },
-      body: JSON.stringify({ time_spent: timeSpent })
+      headers,
+      body: JSON.stringify({ time_spent: timeSpent }),
+      // Let the last update outlive the page when it is sent on the way out
+      keepalive: true
     }).catch(error => {
       console.error("Failed to send tracking update:", error)
     })
@@ -1464,13 +1493,15 @@ export class PdfViewer {
 
   // Cleanup
   destroy() {
+    this._destroyed = true
+
     // Remove the document/container listeners from _setupEventListeners()
     this._abortController.abort()
 
-    if (this._trackingInterval) {
-      clearInterval(this._trackingInterval)
-      this._sendTrackingUpdate()
-    }
+    // Report the time since the last heartbeat, unless the tab is hidden and
+    // the clock is already stopped
+    this._pauseTracking()
+    this._trackingStarted = false
 
     // Tools first: deactivating one calls back into the UI below (the ink
     // tool restores the colour picker), so that UI must still exist.
