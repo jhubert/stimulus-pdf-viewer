@@ -55,6 +55,22 @@ export class BaseTool {
     this.onPointerUp(event)
   }
 
+  /**
+   * Create an annotation from an event handler that nothing waits on.
+   *
+   * The annotation manager reports a failed save to the reader itself
+   * (pdf-viewer:error) and then rejects. Tools call it from pointer and click
+   * handlers, where that rejection has no one to catch it.
+   * @returns {Promise<Object|null>} The saved annotation, or null if saving failed
+   */
+  async _saveAnnotation(data) {
+    try {
+      return await this.annotationManager.createAnnotation(data)
+    } catch {
+      return null
+    }
+  }
+
   // Override in subclasses - pointer events work like mouse events but also support touch/pen
   onActivate() {}
   onDeactivate() {}

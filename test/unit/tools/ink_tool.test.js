@@ -355,4 +355,81 @@ describe("InkTool", () => {
       expect(() => tool.destroy()).not.toThrow()
     })
   })
+
+
+  describe("more than one pointer", () => {
+    function pointer(type, pointerId, x, y, target = host.page) {
+      return {
+        pointerType: type,
+        pointerId,
+        clientX: x,
+        clientY: y,
+        target,
+        preventDefault: vi.fn()
+      }
+    }
+
+    beforeEach(() => {
+      host.page.setPointerCapture = vi.fn()
+      host.page.hasPointerCapture = vi.fn(() => false)
+      tool.activate()
+    })
+
+    it("ignores a palm that lands while the pen is drawing", () => {
+      // Regression: the second pointerdown restarted the stroke, leaving the
+      // first stroke's canvas on the page for good.
+      tool.onPointerDown(pointer("pen", 1, 150, 100))
+      tool.onPointerDown(pointer("touch", 2, 400, 500))
+
+      expect(host.page.querySelectorAll(".ink-drawing-canvas")).toHaveLength(1)
+      expect(tool.currentStroke.points).toEqual([{ x: 150, y: 100 }])
+    })
+
+    it("keeps another pointer's movement out of the stroke", () => {
+      tool.onPointerDown(pointer("pen", 1, 150, 100))
+      tool.onPointerMove(pointer("touch", 2, 400, 500))
+      tool.onPointerMove(pointer("pen", 1, 160, 110))
+
+      expect(tool.currentStroke.points).toEqual([{ x: 150, y: 100 }, { x: 160, y: 110 }])
+    })
+
+    it("lets only the drawing pointer end the stroke", () => {
+      tool.onPointerDown(pointer("pen", 1, 150, 100))
+      tool.onPointerMove(pointer("pen", 1, 160, 110))
+
+      tool.onPointerUp(pointer("touch", 2, 400, 500))
+      expect(tool.isDrawing).toBe(true)
+
+      tool.onPointerUp(pointer("pen", 1, 160, 110))
+      expect(tool.isDrawing).toBe(false)
+      expect(tool.pendingStrokes).toHaveLength(1)
+    })
+
+    it("drops the stroke when a second finger makes it a pinch", () => {
+      tool.onPointerDown(pointer("touch", 1, 150, 100))
+      tool.onPointerMove(pointer("touch", 1, 160, 110))
+      tool.onPointerDown(pointer("touch", 2, 400, 500))
+
+      tool.onPointerMove(pointer("touch", 1, 170, 120))
+      tool.onPointerUp(pointer("touch", 1, 170, 120))
+      tool.onPointerUp(pointer("touch", 2, 400, 500))
+
+      expect(tool.pendingStrokes).toHaveLength(0)
+      expect(host.page.querySelectorAll(".ink-drawing-canvas")).toHaveLength(0)
+      expect(host.pagesContainer.classList.contains("is-drawing")).toBe(false)
+    })
+
+    it("draws normally again after a pinch", () => {
+      tool.onPointerDown(pointer("touch", 1, 150, 100))
+      tool.onPointerDown(pointer("touch", 2, 400, 500))
+      tool.onPointerUp(pointer("touch", 1, 150, 100))
+      tool.onPointerUp(pointer("touch", 2, 400, 500))
+
+      tool.onPointerDown(pointer("touch", 3, 200, 200))
+      tool.onPointerMove(pointer("touch", 3, 220, 230))
+      tool.onPointerUp(pointer("touch", 3, 220, 230))
+
+      expect(tool.pendingStrokes).toHaveLength(1)
+    })
+  })
 })

@@ -1,6 +1,6 @@
 import { TextSelectionTool } from "./text_selection_tool"
 import { ColorPicker } from "../ui/color_picker"
-import { FREE_HIGHLIGHT_SUBJECT } from "../annotation_types"
+import { AnnotationType, FREE_HIGHLIGHT_SUBJECT } from "../annotation_types"
 
 export class HighlightTool extends TextSelectionTool {
   constructor(pdfViewer) {
@@ -11,6 +11,7 @@ export class HighlightTool extends TextSelectionTool {
     this.freehandPoints = []
     this.freehandPageNumber = null
     this.freehandCanvas = null
+    this.freehandPointerId = null // The pointer drawing the current stroke
 
     // Default freehand thickness (in pixels)
     this.freehandThickness = 24
@@ -84,6 +85,10 @@ export class HighlightTool extends TextSelectionTool {
   }
 
   onPointerDown(event) {
+    // A second pointer while a stroke is in progress (a resting palm, another
+    // finger) must not restart it; that would orphan the preview canvas
+    if (this.isFreehand) return
+
     // Ignore clicks on annotations or the edit toolbar
     if (event.target.closest(".annotation") || event.target.closest(".annotation-edit-toolbar")) {
       return
@@ -116,6 +121,7 @@ export class HighlightTool extends TextSelectionTool {
 
   onPointerMove(event) {
     if (this.isFreehand) {
+      if (event.pointerId !== this.freehandPointerId) return
       this._continueFreehand(event)
     } else if (this.isTouchTextSelecting) {
       this._continueTouchTextSelection(event)
@@ -123,6 +129,9 @@ export class HighlightTool extends TextSelectionTool {
   }
 
   async onPointerUp(event) {
+    // Only the pointer that is drawing ends the stroke
+    if (this.isFreehand && event.pointerId !== this.freehandPointerId) return
+
     // Release pointer capture if we have it
     const hasCapture = this.isFreehand || this.isTouchTextSelecting
     if (hasCapture && event.target.hasPointerCapture?.(event.pointerId)) {
@@ -158,9 +167,18 @@ export class HighlightTool extends TextSelectionTool {
         this._createTextHighlightFromData(rects, selectedText, textLayer)
       }
     } else if (this.isFreehand && this.freehandPoints.length > 1) {
-      // Freehand was drawn, create freehand highlight
-      // Keep preview visible until annotation is saved
-      await this._createFreehandHighlight()
+      // Freehand was drawn, create freehand highlight. Hand the stroke off
+      // and reset straight away so the next one can start while this saves;
+      // only its preview stays, until the saved annotation replaces it.
+      const points = this.freehandPoints
+      const pageNumber = this.freehandPageNumber
+      const preview = this.freehandCanvas
+      this.freehandCanvas = null
+      this._cleanupFreehand()
+
+      await this._createFreehandHighlight(points, pageNumber)
+      preview?.remove()
+      return
     }
 
     this._cleanupFreehand()
@@ -177,6 +195,7 @@ export class HighlightTool extends TextSelectionTool {
 
     this.freehandPageNumber = parseInt(pageContainer.dataset.pageNumber, 10)
     this.isFreehand = true
+    this.freehandPointerId = event.pointerId
     this.freehandPoints = [{ x: event.clientX, y: event.clientY }]
 
     // Add drawing state class to maintain cursor during drag
@@ -251,6 +270,7 @@ export class HighlightTool extends TextSelectionTool {
 
   _cleanupFreehand() {
     this.isFreehand = false
+    this.freehandPointerId = null
     this.freehandPoints = []
     this.freehandPageNumber = null
 
@@ -280,8 +300,8 @@ export class HighlightTool extends TextSelectionTool {
     const color = this.pdfViewer.getHighlightColor() || ColorPicker.DEFAULT_HIGHLIGHT_COLOR
 
     // Create annotation
-    await this.annotationManager.createAnnotation({
-      annotation_type: "highlight",
+    await this._saveAnnotation({
+      annotation_type: AnnotationType.HIGHLIGHT,
       page: pageNumber,
       quads: quads,
       rect: rect,
@@ -292,17 +312,17 @@ export class HighlightTool extends TextSelectionTool {
     })
   }
 
-  async _createFreehandHighlight() {
-    if (this.freehandPoints.length < 2 || !this.freehandPageNumber) return
+  async _createFreehandHighlight(points, pageNumber) {
+    if (points.length < 2 || !pageNumber) return
 
-    const pageContainer = this.pdfViewer.viewer.getPageContainer(this.freehandPageNumber)
+    const pageContainer = this.pdfViewer.viewer.getPageContainer(pageNumber)
     if (!pageContainer) return
 
     const pageRect = pageContainer.getBoundingClientRect()
     const scale = this.pdfViewer.viewer.getScale()
 
     // Convert screen coordinates to PDF coordinates
-    const pdfPoints = this.freehandPoints.map(point => ({
+    const pdfPoints = points.map(point => ({
       x: (point.x - pageRect.left) / scale,
       y: (point.y - pageRect.top) / scale
     }))
@@ -324,9 +344,9 @@ export class HighlightTool extends TextSelectionTool {
     const colorWithAlpha = baseColor + alphaHex
 
     // Create ink annotation with highlight styling (thick stroke, low opacity)
-    await this.annotationManager.createAnnotation({
-      annotation_type: "ink",
-      page: this.freehandPageNumber,
+    await this._saveAnnotation({
+      annotation_type: AnnotationType.INK,
+      page: pageNumber,
       ink_strokes: [{ points: pdfPoints }],
       rect: [minX, minY, maxX - minX, maxY - minY],
       color: colorWithAlpha,

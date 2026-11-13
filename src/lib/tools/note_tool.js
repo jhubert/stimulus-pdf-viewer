@@ -2,6 +2,7 @@ import { BaseTool } from "./base_tool"
 import { CoordinateTransformer } from "../coordinate_transformer"
 import { ColorPicker } from "../ui/color_picker"
 import { Icons } from "../ui/icons"
+import { AnnotationType } from "../annotation_types"
 
 export class NoteTool extends BaseTool {
   constructor(pdfViewer) {
@@ -122,22 +123,21 @@ export class NoteTool extends BaseTool {
 
     closeBtn.addEventListener("click", () => this._closeDialog())
 
-    saveBtn.addEventListener("click", async () => {
+    // Keep the dialog open if the save fails, so the text isn't lost and the
+    // reader can try again
+    const save = async () => {
+      const dialog = this.noteDialog
       const text = textarea.value.trim()
-      if (text) {
-        await this._createNote(text)
-      }
-      this._closeDialog()
-    })
+      if (text && !(await this._createNote(text))) return
+      if (this.noteDialog === dialog) this._closeDialog()
+    }
+
+    saveBtn.addEventListener("click", save)
 
     // Save on Ctrl+Enter
     textarea.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        const text = textarea.value.trim()
-        if (text) {
-          this._createNote(text)
-        }
-        this._closeDialog()
+        save()
       } else if (e.key === "Escape") {
         e.preventDefault()
         e.stopPropagation()
@@ -160,15 +160,16 @@ export class NoteTool extends BaseTool {
     this.pendingNote = null
   }
 
+  /** @returns {Promise<Object|null>} The saved note, or null if it wasn't saved */
   async _createNote(text) {
-    if (!this.pendingNote) return
+    if (!this.pendingNote) return null
 
     const { pageNumber, x, y } = this.pendingNote
     const color = this.pdfViewer.getHighlightColor() || ColorPicker.DEFAULT_HIGHLIGHT_COLOR
 
     // Create annotation
-    await this.annotationManager.createAnnotation({
-      annotation_type: "note",
+    return this._saveAnnotation({
+      annotation_type: AnnotationType.NOTE,
       page: pageNumber,
       rect: [x, y, 24, 24], // Icon size
       contents: text,
@@ -195,7 +196,7 @@ export class NoteTool extends BaseTool {
     this.editingAnnotation = annotation
 
     // Determine dialog title based on annotation type and whether contents exists
-    const isNote = annotation.annotation_type === "note"
+    const isNote = annotation.annotation_type === AnnotationType.NOTE
     const hasContents = annotation.contents && annotation.contents.trim()
     let dialogTitle
     if (isNote) {
@@ -286,9 +287,14 @@ export class NoteTool extends BaseTool {
   }
 
   async _updateNote(annotationId, text) {
-    await this.annotationManager.updateAnnotation(annotationId, {
-      contents: text
-    })
+    try {
+      await this.annotationManager.updateAnnotation(annotationId, {
+        contents: text
+      })
+    } catch {
+      // The annotation manager has already reported the failure, and the
+      // dialog's handlers don't wait on this
+    }
     this.editingAnnotation = null
   }
 
