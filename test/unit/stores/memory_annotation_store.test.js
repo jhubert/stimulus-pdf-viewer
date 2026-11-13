@@ -122,13 +122,25 @@ describe("MemoryAnnotationStore", () => {
   })
 
   describe("restore", () => {
-    it("is unsupported and says so rather than failing silently", async () => {
-      // There is no soft-delete in memory, so undo cannot work here. The
-      // warning is what tells a developer why the undo bar does nothing.
-      vi.spyOn(console, "warn").mockImplementation(() => {})
+    it("puts a deleted annotation back, so the undo bar works without a backend", async () => {
+      const created = await store.create({ annotation_type: "note", page: 1 })
+      await store.delete(created.id)
 
+      await expect(store.restore(created.id)).resolves.toEqual(created)
+      expect(await store.load()).toEqual([created])
+    })
+
+    it("restores a given deletion only once", async () => {
+      const created = await store.create({ annotation_type: "note", page: 1 })
+      await store.delete(created.id)
+      await store.restore(created.id)
+
+      await expect(store.restore(created.id)).resolves.toBeNull()
+      expect(await store.load()).toHaveLength(1)
+    })
+
+    it("resolves to null for an annotation that was never deleted", async () => {
       await expect(store.restore("any")).resolves.toBeNull()
-      expect(console.warn).toHaveBeenCalled()
     })
   })
 

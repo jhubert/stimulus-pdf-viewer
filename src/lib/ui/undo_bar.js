@@ -33,12 +33,7 @@ export class UndoBar {
   }
 
   _setupEventListeners() {
-    this.undoButton.addEventListener("click", () => {
-      if (this.currentAnnotation && this.onUndo) {
-        this.onUndo(this.currentAnnotation)
-      }
-      this.hide()
-    })
+    this.undoButton.addEventListener("click", () => this.undo())
 
     this.dismissButton.addEventListener("click", () => {
       this.hide()
@@ -69,6 +64,14 @@ export class UndoBar {
     this.hideTimeout = setTimeout(() => {
       this.hide()
     }, AUTO_HIDE_DELAY)
+  }
+
+  /** Undo the deletion on offer, as the Undo button does. */
+  undo() {
+    if (this.currentAnnotation && this.onUndo) {
+      this.onUndo(this.currentAnnotation)
+    }
+    this.hide()
   }
 
   hide() {

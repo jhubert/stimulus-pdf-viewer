@@ -741,4 +741,124 @@ describe("PdfViewer", () => {
       expect(init.headers).not.toHaveProperty("X-CSRF-Token")
     })
   })
+
+  describe("undo", () => {
+    const pressUndo = (target = document.body, init = {}) => {
+      const event = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true, ...init })
+      target.dispatchEvent(event)
+      return event
+    }
+
+    async function withDeletedNote() {
+      const made = await makeViewer({ annotations: [note({ page: 1 })] })
+      const [stored] = await made.store.load()
+      await made.viewer.annotationManager.deleteAnnotation(stored.id)
+      return { ...made, stored }
+    }
+
+    it("restores the deleted annotation on Ctrl+Z, as the announcement promises", async () => {
+      const { viewer, stored } = await withDeletedNote()
+
+      const event = pressUndo()
+
+      await vi.waitFor(() => expect(viewer.annotationManager.getAnnotation(stored.id)).toBeTruthy())
+      expect(event.defaultPrevented).toBe(true)
+      expect(viewer.undoBar.currentAnnotation).toBeNull()
+      viewer.destroy()
+    })
+
+    it("restores on Cmd+Z too", async () => {
+      const { viewer, stored } = await withDeletedNote()
+
+      pressUndo(document.body, { ctrlKey: false, metaKey: true })
+
+      await vi.waitFor(() => expect(viewer.annotationManager.getAnnotation(stored.id)).toBeTruthy())
+      viewer.destroy()
+    })
+
+    it("leaves Ctrl+Z alone while typing", async () => {
+      const { viewer, stored } = await withDeletedNote()
+      const textarea = document.createElement("textarea")
+      document.body.appendChild(textarea)
+
+      const event = pressUndo(textarea)
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(viewer.undoBar.currentAnnotation).toBeTruthy()
+      expect(viewer.annotationManager.getAnnotation(stored.id)).toBeUndefined()
+      viewer.destroy()
+    })
+
+    it("leaves Ctrl+Z alone when there is nothing to undo", async () => {
+      const { viewer } = await makeViewer()
+
+      expect(pressUndo().defaultPrevented).toBe(false)
+      viewer.destroy()
+    })
+
+    it("stops listening once destroyed", async () => {
+      const { viewer } = await withDeletedNote()
+      const onUndo = vi.spyOn(viewer.undoBar, "undo")
+
+      viewer.destroy()
+      pressUndo()
+
+      expect(onUndo).not.toHaveBeenCalled()
+    })
+
+    it("does not announce a restore the store couldn't perform", async () => {
+      const { viewer, store, stored } = await withDeletedNote()
+      store.restore = vi.fn(async () => null)
+      const render = vi.spyOn(viewer, "_renderAnnotationsForPage")
+
+      await viewer._onAnnotationUndo(stored)
+
+      expect(render).not.toHaveBeenCalled()
+      viewer.destroy()
+    })
+
+    it("does not reject when a delete or an undo fails", async () => {
+      // Both are fired from click handlers; the manager reports the failure.
+      const { viewer, store } = await makeViewer({ annotations: [note({ page: 1 })] })
+      const [stored] = await store.load()
+      store.delete = vi.fn(async () => { throw new Error("offline") })
+      store.restore = vi.fn(async () => { throw new Error("offline") })
+      const onError = vi.fn()
+      viewer.container.addEventListener("pdf-viewer:user-error", onError)
+
+      await expect(viewer._onAnnotationDelete(stored)).resolves.toBeUndefined()
+      await expect(viewer._onAnnotationUndo(stored)).resolves.toBeUndefined()
+
+      expect(onError).toHaveBeenCalledTimes(2)
+      viewer.destroy()
+    })
+  })
+
+  describe("changing an annotation's colour", () => {
+    async function recolour(record) {
+      const { viewer, store } = await makeViewer({ annotations: [record] })
+      const [stored] = await store.load()
+      await viewer._onAnnotationColorChange(viewer.annotationManager.getAnnotation(stored.id), "#00FF00")
+      const { color } = viewer.annotationManager.getAnnotation(stored.id)
+      viewer.destroy()
+      return color
+    }
+
+    it("keeps a pen drawing opaque when the store returns no opacity", async () => {
+      // Regression: every ink record defaulted to the highlighter's 40%.
+      expect(await recolour(ink({ page: 1, color: "#0000FF", opacity: undefined }))).toBe("#00FF00ff")
+    })
+
+    it("keeps a freehand highlight translucent", async () => {
+      expect(await recolour(freeHighlight({ page: 1, color: "#FFA500", opacity: undefined }))).toBe("#00FF0066")
+    })
+
+    it("keeps the alpha already in the colour when there is no opacity field", async () => {
+      expect(await recolour(freeHighlight({ page: 1, color: "#FFA50033", opacity: undefined }))).toBe("#00FF0033")
+    })
+
+    it("prefers the stored opacity", async () => {
+      expect(await recolour(highlight({ page: 1, color: "#FFA500CC", opacity: 0.4 }))).toBe("#00FF0066")
+    })
+  })
 })

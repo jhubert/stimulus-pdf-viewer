@@ -14,7 +14,7 @@ import { FindController } from "./find_controller"
 import { PasswordPrompt } from "./ui/password_prompt"
 import { LinkLayer } from "./ui/link_layer"
 import { getAnnouncer, acquireAnnouncer, destroyAnnouncer } from "./ui/announcer"
-import { AnnotationType, isHighlightLike, supportsComment } from "./annotation_types"
+import { AnnotationType, isHighlightLike, isFreeHighlight, supportsComment } from "./annotation_types"
 
 // Annotation tools
 import { SelectTool } from "./tools/select_tool"
@@ -323,6 +323,17 @@ export class PdfViewer {
         return
       }
       this._deselectAnnotation()
+    }, { signal })
+
+    // Ctrl/Cmd+Z restores the annotation the undo bar is offering. Only while
+    // the bar is showing, and never while typing, where it is the field's own undo.
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key?.toLowerCase() !== "z") return
+      if (e.target.closest?.("input, textarea, select, [contenteditable]")) return
+      if (!this.undoBar?.currentAnnotation) return
+
+      e.preventDefault()
+      this.undoBar.undo()
     }, { signal })
 
     // Handle error events from annotation manager and other components
@@ -671,12 +682,27 @@ export class PdfViewer {
     }
   }
 
+  // Delete and undo are fired from click and key handlers that don't wait on
+  // them. The annotation manager reports a failure itself (pdf-viewer:error),
+  // so rethrowing here would only add an unhandled rejection.
   async _onAnnotationDelete(annotation) {
-    await this.annotationManager.deleteAnnotation(annotation.id)
+    try {
+      await this.annotationManager.deleteAnnotation(annotation.id)
+    } catch {
+      // Already reported
+    }
   }
 
   async _onAnnotationUndo(annotation) {
-    await this.annotationManager.restoreAnnotation(annotation.id)
+    let restored
+    try {
+      restored = await this.annotationManager.restoreAnnotation(annotation.id)
+    } catch {
+      return // Already reported
+    }
+    // A store that can't restore returns nothing; don't claim it worked
+    if (!restored) return
+
     this._renderAnnotationsForPage(annotation.page, this.viewer.getPageContainer(annotation.page))
 
     // Announce to screen readers
@@ -1331,9 +1357,16 @@ export class PdfViewer {
 
   async _onAnnotationColorChange(annotation, color) {
     try {
-      // Preserve the existing opacity when changing color (default to 0.4 for highlights/ink, 1 for others)
-      const defaultOpacity = (annotation.annotation_type === AnnotationType.HIGHLIGHT || annotation.annotation_type === AnnotationType.INK) ? 0.4 : 1
-      const opacity = annotation.opacity ?? defaultOpacity
+      // Preserve the existing opacity when changing color. A store need not
+      // return an opacity field, so fall back to the alpha already encoded in
+      // the color, then to the type's default: 0.4 for highlights (text and
+      // freehand), 1 for everything else. Pen drawings are ink too, and are opaque.
+      const isHighlight = annotation.annotation_type === AnnotationType.HIGHLIGHT || isFreeHighlight(annotation)
+      const existing = annotation.color || ""
+      const alphaInColor = existing.length === 9 && existing.startsWith("#")
+        ? parseInt(existing.slice(7, 9), 16) / 255
+        : NaN
+      const opacity = annotation.opacity ?? (Number.isNaN(alphaInColor) ? (isHighlight ? 0.4 : 1) : alphaInColor)
 
       // Encode opacity into color string as alpha channel (#RRGGBBAA)
       // The backend derives opacity from the color's alpha channel
