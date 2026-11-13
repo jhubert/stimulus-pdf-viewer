@@ -16,6 +16,7 @@ export class MemoryAnnotationStore extends AnnotationStore {
   constructor() {
     super()
     this._annotations = []
+    this._deleted = new Map() // id -> annotation, so a delete can be undone
     this._nextId = 1
   }
 
@@ -59,12 +60,20 @@ export class MemoryAnnotationStore extends AnnotationStore {
     }
 
     const [annotation] = this._annotations.splice(index, 1)
+    this._deleted.set(id, annotation)
     return annotation
   }
 
+  /**
+   * Put back an annotation removed by delete().
+   * @returns {Promise<Object|null>} The annotation, or null if it was never deleted
+   */
   async restore(id) {
-    // Memory store doesn't support soft-delete/restore
-    console.warn("MemoryAnnotationStore.restore() is not supported")
-    return null
+    const annotation = this._deleted.get(id)
+    if (!annotation) return null
+
+    this._deleted.delete(id)
+    this._annotations.push(annotation)
+    return annotation
   }
 }

@@ -589,4 +589,188 @@ describe("DownloadManager", () => {
     const annots = await readAnnotations(bytes)
     expect(annots.map(a => a.Subtype).sort()).toEqual(["Highlight", "Ink", "Ink", "Text", "Underline"])
   })
+
+
+  describe("pages that are rotated or cropped", () => {
+    // Annotations are stored as the viewer displays the page. These build a
+    // page, ask real PDF.js where a displayed point lies in the PDF's own
+    // coordinates, and expect the export to put the annotation there.
+    async function pageBytes({ rotate = 0, cropBox = null } = {}) {
+      const { PDFDocument, degrees } = await import("pdf-lib")
+      const doc = await PDFDocument.create()
+      const page = doc.addPage([612, 792])
+      if (rotate) page.setRotation(degrees(rotate))
+      if (cropBox) page.setCropBox(...cropBox)
+      return doc.save()
+    }
+
+    async function exportOn(source, annotations) {
+      performMock.mockResolvedValue({
+        ok: true,
+        response: { arrayBuffer: async () => source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength) }
+      })
+      const { bytes } = await download(annotations)
+      return readAnnotations(bytes)
+    }
+
+    async function displayedToPdf(source, points) {
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
+      const doc = await pdfjs.getDocument({ data: source.slice(), isEvalSupported: false }).promise
+      const page = await doc.getPage(1)
+      const viewport = page.getViewport({ scale: 1, rotation: page.rotate })
+      return points.map(([x, y]) => viewport.convertToPdfPoint(x, y))
+    }
+
+    const cases = [
+      ["rotated 90°", { rotate: 90 }],
+      ["rotated 180°", { rotate: 180 }],
+      ["rotated 270°", { rotate: 270 }],
+      ["cropped", { cropBox: [50, 100, 400, 500] }],
+      ["cropped and rotated 90°", { rotate: 90, cropBox: [50, 100, 400, 500] }]
+    ]
+
+    it.each(cases)("places ink where it was drawn on a page %s", async (_label, options) => {
+      const source = await pageBytes(options)
+      const drawn = [[30, 40], [120, 200], [300, 90]]
+
+      const [annot] = await exportOn(source, [
+        ink({ page: 1, ink_strokes: [stroke(drawn.map(([x, y]) => ({ x, y })))] })
+      ])
+
+      const expected = (await displayedToPdf(source, drawn)).flat()
+      expect(annot.InkList[0]).toHaveLength(expected.length)
+      annot.InkList[0].forEach((value, i) => expect(value).toBeCloseTo(expected[i], 6))
+    })
+
+    it.each(cases)("places a highlight's quads on a page %s", async (_label, options) => {
+      const source = await pageBytes(options)
+      const q = quad({ left: 60, right: 260, top: 80, bottom: 100 })
+
+      const [annot] = await exportOn(source, [highlight({ page: 1, quads: [q] })])
+
+      // QuadPoints order: bottom-left, bottom-right, top-right, top-left
+      const expected = (await displayedToPdf(source, [
+        [q.p3.x, q.p3.y], [q.p4.x, q.p4.y], [q.p2.x, q.p2.y], [q.p1.x, q.p1.y]
+      ])).flat()
+      annot.QuadPoints.forEach((value, i) => expect(value).toBeCloseTo(expected[i], 6))
+    })
+
+    it.each(cases)("keeps a note's icon box well-formed on a page %s", async (_label, options) => {
+      const source = await pageBytes(options)
+
+      const [annot] = await exportOn(source, [note({ page: 1, rect: [100, 150] })])
+
+      const [[ax, ay], [bx, by]] = await displayedToPdf(source, [[100, 150], [124, 174]])
+      const expected = [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)]
+      annot.Rect.forEach((value, i) => expect(value).toBeCloseTo(expected[i], 6))
+      expect(annot.Rect[2] - annot.Rect[0]).toBeCloseTo(24, 6)
+      expect(annot.Rect[3] - annot.Rect[1]).toBeCloseTo(24, 6)
+    })
+
+    it("keeps annotations on a rotated page inside the page", async () => {
+      // Regression: only the y flip was applied, so a point at displayed
+      // x=700 on a /Rotate 90 page was written at x=700 on a 612pt-wide page.
+      const source = await pageBytes({ rotate: 90 })
+
+      const [annot] = await exportOn(source, [note({ page: 1, rect: [700, 50] })])
+
+      const [x0, y0, x1, y1] = annot.Rect
+      expect(x0).toBeGreaterThanOrEqual(0)
+      expect(x1).toBeLessThanOrEqual(612)
+      expect(y0).toBeGreaterThanOrEqual(0)
+      expect(y1).toBeLessThanOrEqual(792)
+    })
+  })
+
+  describe("user names outside Latin-1", () => {
+    // A tiny valid PNG, standing in for what a browser canvas would produce
+    const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+
+    async function pageImages(bytes) {
+      const { PDFDocument, PDFName, PDFDict } = await import("pdf-lib")
+      const doc = await PDFDocument.load(bytes)
+      const xobjects = doc.getPages()[0].node.Resources()?.lookup(PDFName.of("XObject"))
+      if (!(xobjects instanceof PDFDict)) return []
+      return xobjects.keys()
+        .map(key => xobjects.lookup(key))
+        .filter(x => x.dict.get(PDFName.of("Subtype")) === PDFName.of("Image"))
+    }
+
+    // Regression: Helvetica only covers WinAnsi and pdf-lib throws on anything
+    // else, so the watermark failed the whole download for these readers.
+    it.each(["Łukasz Nowak", "山田 太郎", "Олександр"])("still downloads for %s", async (userName) => {
+      await expect(download([], { userName })).resolves.toBeTruthy()
+    })
+
+    it("draws the name as an image when the browser can render it", async () => {
+      const { manager, captured } = makeManager([], { userName: "山田 太郎" })
+      manager._renderTextPng = vi.fn(() => ({ png: PNG, descent: 0.25 }))
+
+      await manager.downloadWithAnnotations()
+
+      expect(manager._renderTextPng).toHaveBeenCalledWith("山田 太郎")
+      expect((await pageImages(new Uint8Array(await captured.blob.arrayBuffer()))).length).toBeGreaterThan(0)
+    })
+
+    it("keeps drawing a Latin-1 name as text", async () => {
+      const { manager, captured } = makeManager([], { userName: "Zoë Müller" })
+      manager._renderTextPng = vi.fn()
+
+      await manager.downloadWithAnnotations()
+
+      expect(manager._renderTextPng).not.toHaveBeenCalled()
+      expect(await pageImages(new Uint8Array(await captured.blob.arrayBuffer()))).toHaveLength(0)
+    })
+
+    it("without a canvas, draws the characters it can and drops the rest", async () => {
+      const { manager } = makeManager([], { userName: "Łukasz" })
+      const { PDFDocument } = await import("pdf-lib")
+
+      const watermark = await manager._prepareWatermark(await PDFDocument.create())
+
+      expect(watermark.text).toBe("ukasz")
+    })
+
+    it("omits the watermark when nothing in the name can be drawn", async () => {
+      const { manager } = makeManager([], { userName: "山田" })
+      const { PDFDocument } = await import("pdf-lib")
+
+      expect(await manager._prepareWatermark(await PDFDocument.create())).toBeNull()
+    })
+
+    it("writes the author intact on each annotation", async () => {
+      const { bytes } = await download([note({ page: 1 })], { userName: "Łukasz 山田" })
+      const [annot] = await readAnnotations(bytes)
+
+      expect(annot.T).toBe("Łukasz 山田")
+    })
+  })
+
+  describe("when the document can't be fetched", () => {
+    it("rejects an annotated download on an HTTP error", async () => {
+      performMock.mockResolvedValue({ ok: false, statusCode: 404, response: { arrayBuffer: async () => new ArrayBuffer(0) } })
+      const { manager, captured } = makeManager([])
+
+      await expect(manager.downloadWithAnnotations()).rejects.toThrow("HTTP 404")
+      expect(captured.blob).toBeUndefined()
+    })
+
+    it("rejects an original download on an HTTP error", async () => {
+      performMock.mockResolvedValue({ ok: false, statusCode: 500, response: { arrayBuffer: async () => new ArrayBuffer(0) } })
+      const { manager, captured } = makeManager([])
+
+      await expect(manager.downloadOriginal()).rejects.toThrow("HTTP 500")
+      expect(captured.blob).toBeUndefined()
+    })
+
+    it("does not save a login page as the document", async () => {
+      // An expired session usually answers 200 with HTML
+      const html = new TextEncoder().encode("<!DOCTYPE html><html><body>Sign in</body></html>")
+      performMock.mockResolvedValue({ ok: true, response: { arrayBuffer: async () => html.buffer } })
+      const { manager, captured } = makeManager([])
+
+      await expect(manager.downloadOriginal()).rejects.toThrow("did not return a PDF")
+      expect(captured.blob).toBeUndefined()
+    })
+  })
 })

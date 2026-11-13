@@ -21,7 +21,7 @@ export class UnderlineTool extends TextSelectionTool {
   }
 
   async createAnnotationFromSelection(selectedText, pageNumber, quads, rect) {
-    await this.annotationManager.createAnnotation({
+    await this._saveAnnotation({
       annotation_type: AnnotationType.UNDERLINE,
       page: pageNumber,
       quads: quads,

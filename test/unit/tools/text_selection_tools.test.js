@@ -297,10 +297,7 @@ describe("HighlightTool", () => {
   describe("freehand highlights", () => {
     it("creates an ink annotation marked as a free highlight", async () => {
       const tool = new HighlightTool(host)
-      tool.freehandPageNumber = 1
-      tool.freehandPoints = [{ x: 150, y: 100 }, { x: 250, y: 120 }]
-
-      await tool._createFreehandHighlight()
+      await tool._createFreehandHighlight([{ x: 150, y: 100 }, { x: 250, y: 120 }], 1)
 
       const [payload] = host.annotationManager.createAnnotation.mock.calls[0]
       expect(payload.annotation_type).toBe(AnnotationType.INK)
@@ -309,10 +306,7 @@ describe("HighlightTool", () => {
 
     it("converts screen points into page coordinates", async () => {
       const tool = new HighlightTool(host)
-      tool.freehandPageNumber = 1
-      tool.freehandPoints = [{ x: 150, y: 100 }, { x: 250, y: 120 }]
-
-      await tool._createFreehandHighlight()
+      await tool._createFreehandHighlight([{ x: 150, y: 100 }, { x: 250, y: 120 }], 1)
 
       const [payload] = host.annotationManager.createAnnotation.mock.calls[0]
       expect(payload.ink_strokes[0].points).toEqual([{ x: 50, y: 50 }, { x: 150, y: 70 }])
@@ -321,11 +315,9 @@ describe("HighlightTool", () => {
     it("scales points and thickness by the zoom level", async () => {
       const zoomed = makeHost({ scale: 2 })
       const tool = new HighlightTool(zoomed)
-      tool.freehandPageNumber = 1
-      tool.freehandPoints = [{ x: 300, y: 250 }, { x: 500, y: 290 }]
       tool.freehandThickness = 24
 
-      await tool._createFreehandHighlight()
+      await tool._createFreehandHighlight([{ x: 300, y: 250 }, { x: 500, y: 290 }], 1)
 
       const [payload] = zoomed.annotationManager.createAnnotation.mock.calls[0]
       expect(payload.ink_strokes[0].points[0]).toEqual({ x: 100, y: 100 })
@@ -334,10 +326,7 @@ describe("HighlightTool", () => {
 
     it("encodes the highlight opacity into the color alpha", async () => {
       const tool = new HighlightTool(host)
-      tool.freehandPageNumber = 1
-      tool.freehandPoints = [{ x: 150, y: 100 }, { x: 250, y: 120 }]
-
-      await tool._createFreehandHighlight()
+      await tool._createFreehandHighlight([{ x: 150, y: 100 }, { x: 250, y: 120 }], 1)
 
       // 0.4 * 255 = 102 = 0x66
       expect(host.annotationManager.createAnnotation.mock.calls[0][0].color).toMatch(/66$/)
@@ -345,22 +334,91 @@ describe("HighlightTool", () => {
 
     it("ignores a stroke with fewer than two points", async () => {
       const tool = new HighlightTool(host)
-      tool.freehandPageNumber = 1
-      tool.freehandPoints = [{ x: 150, y: 100 }]
-
-      await tool._createFreehandHighlight()
+      await tool._createFreehandHighlight([{ x: 150, y: 100 }], 1)
 
       expect(host.annotationManager.createAnnotation).not.toHaveBeenCalled()
     })
 
     it("ignores a stroke with no page", async () => {
       const tool = new HighlightTool(host)
-      tool.freehandPageNumber = null
-      tool.freehandPoints = [{ x: 150, y: 100 }, { x: 250, y: 120 }]
-
-      await tool._createFreehandHighlight()
+      await tool._createFreehandHighlight([{ x: 150, y: 100 }, { x: 250, y: 120 }], null)
 
       expect(host.annotationManager.createAnnotation).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe("HighlightTool freehand strokes and failed saves", () => {
+  let host, tool
+
+  function pointer(pointerId, x, y) {
+    return { pointerType: "pen", pointerId, clientX: x, clientY: y, target: host.page, preventDefault: vi.fn() }
+  }
+
+  beforeEach(() => {
+    host = makeHost()
+    host.page.setPointerCapture = vi.fn()
+    host.page.hasPointerCapture = vi.fn(() => false)
+    host.page.matches = () => false
+    tool = new HighlightTool(host)
+    tool.activate()
+  })
+
+  it("ignores a second pointer while a stroke is in progress", () => {
+    tool.onPointerDown(pointer(1, 150, 100))
+    tool.onPointerDown(pointer(2, 400, 500))
+    tool.onPointerMove(pointer(2, 410, 510))
+    tool.onPointerMove(pointer(1, 250, 120))
+
+    expect(host.page.querySelectorAll(".freehand-preview")).toHaveLength(1)
+    expect(tool.freehandPoints).toEqual([{ x: 150, y: 100 }, { x: 250, y: 120 }])
+  })
+
+  it("lets only the drawing pointer finish the stroke", async () => {
+    tool.onPointerDown(pointer(1, 150, 100))
+    tool.onPointerMove(pointer(1, 250, 120))
+
+    await tool.onPointerUp(pointer(2, 400, 500))
+    expect(host.annotationManager.createAnnotation).not.toHaveBeenCalled()
+
+    await tool.onPointerUp(pointer(1, 250, 120))
+    expect(host.annotationManager.createAnnotation).toHaveBeenCalledOnce()
+  })
+
+  it("lets the next stroke start while the last one is still saving", async () => {
+    let settle
+    host.annotationManager.createAnnotation = vi.fn(() => new Promise((resolve) => { settle = resolve }))
+    tool.onPointerDown(pointer(1, 150, 100))
+    tool.onPointerMove(pointer(1, 250, 120))
+    const saving = tool.onPointerUp(pointer(1, 250, 120))
+
+    tool.onPointerDown(pointer(2, 300, 300))
+    tool.onPointerMove(pointer(2, 350, 320))
+    settle({ id: 1 })
+    await saving
+
+    // The first stroke's preview is gone; the second is untouched
+    expect(host.page.querySelectorAll(".freehand-preview")).toHaveLength(1)
+    expect(tool.isFreehand).toBe(true)
+    expect(tool.freehandPoints).toEqual([{ x: 300, y: 300 }, { x: 350, y: 320 }])
+  })
+
+  it("clears the preview and does not reject when the save fails", async () => {
+    // The annotation manager reports the failure itself; a pointer handler
+    // has no one to catch a rejection.
+    host.annotationManager.createAnnotation = vi.fn(async () => { throw new Error("offline") })
+    tool.onPointerDown(pointer(1, 150, 100))
+    tool.onPointerMove(pointer(1, 250, 120))
+
+    await expect(tool.onPointerUp(pointer(1, 250, 120))).resolves.toBeUndefined()
+    expect(host.page.querySelectorAll(".freehand-preview")).toHaveLength(0)
+  })
+
+  it("does not reject when a text highlight or underline fails to save", async () => {
+    host.annotationManager.createAnnotation = vi.fn(async () => { throw new Error("offline") })
+    const underlineTool = new UnderlineTool(host)
+
+    await expect(underlineTool.createAnnotationFromSelection("text", 1, [], [0, 0, 1, 1])).resolves.toBeUndefined()
+    await expect(tool._saveAnnotation({})).resolves.toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 import { BaseTool } from "./base_tool"
 import { CoordinateTransformer } from "../coordinate_transformer"
 import { ColorPicker } from "../ui/color_picker"
+import { AnnotationType } from "../annotation_types"
 
 // Time to wait before saving a batch of ink strokes (ms)
 const BATCH_SAVE_DELAY = 2000
@@ -14,6 +15,8 @@ export class InkTool extends BaseTool {
     this.currentStroke = null
     this.currentPageNumber = null
     this.drawingCanvas = null
+    this.activePointerId = null // The pointer drawing the current stroke
+    this.activePointerType = null
     this.previousColor = null
     this.inkColor = ColorPicker.DEFAULT_INK_COLOR
 
@@ -86,6 +89,18 @@ export class InkTool extends BaseTool {
   }
 
   onPointerDown(event) {
+    // A second pointer while a stroke is in progress must not start another:
+    // that orphaned the first stroke's canvas and mixed both pointers' moves
+    // into one stroke. Two fingers are a pinch, so drop the stroke and let the
+    // zoom happen; anything else (a palm resting beside the pen) is ignored.
+    if (this.isDrawing) {
+      if (this.activePointerType === "touch" && event.pointerType === "touch") {
+        this.pdfViewer.pagesContainer.classList.remove("is-drawing")
+        this._cleanupCurrentStroke()
+      }
+      return
+    }
+
     // Find which page we're on
     const pageContainer = event.target.closest(".pdf-page")
     if (!pageContainer) return
@@ -105,6 +120,8 @@ export class InkTool extends BaseTool {
 
     this.currentPageNumber = pageNumber
     this.isDrawing = true
+    this.activePointerId = event.pointerId
+    this.activePointerType = event.pointerType
     this.currentStroke = {
       points: [{ x: event.clientX, y: event.clientY }]
     }
@@ -123,6 +140,7 @@ export class InkTool extends BaseTool {
 
   onPointerMove(event) {
     if (!this.isDrawing || !this.currentStroke) return
+    if (event.pointerId !== this.activePointerId) return
 
     // Dedupe consecutive identical points
     const lastPoint = this.currentStroke.points[this.currentStroke.points.length - 1]
@@ -134,6 +152,7 @@ export class InkTool extends BaseTool {
 
   async onPointerUp(event) {
     if (!this.isDrawing || !this.currentStroke) return
+    if (event.pointerId !== this.activePointerId) return
 
     // Release pointer capture
     if (event.target.hasPointerCapture?.(event.pointerId)) {
@@ -306,7 +325,7 @@ export class InkTool extends BaseTool {
     try {
       // Create annotation
       await this.annotationManager.createAnnotation({
-        annotation_type: "ink",
+        annotation_type: AnnotationType.INK,
         page: pageNumber,
         ink_strokes: inkStrokes,
         rect: [minX, minY, maxX - minX, maxY - minY],
@@ -330,6 +349,8 @@ export class InkTool extends BaseTool {
   _cleanupCurrentStroke() {
     this.currentStroke = null
     this.isDrawing = false
+    this.activePointerId = null
+    this.activePointerType = null
 
     if (this.drawingCanvas) {
       this.drawingCanvas.remove()

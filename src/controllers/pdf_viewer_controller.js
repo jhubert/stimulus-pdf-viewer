@@ -51,9 +51,14 @@ export default class extends Controller {
     this._setupErrorListener()
 
     // Load the PDF
+    const pdfViewer = this.pdfViewer
     try {
-      await this.pdfViewer.load()
+      await pdfViewer.load()
     } catch (error) {
+      // Disconnected (or reconnected with a new viewer) while loading: this
+      // failure belongs to a viewer that is gone, so there is nothing to show
+      if (this.pdfViewer !== pdfViewer) return
+
       console.error("Failed to load PDF:", error)
       this._handleLoadFailure(error)
     }

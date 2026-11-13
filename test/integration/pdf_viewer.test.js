@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { ViewerEvents } from "../../src/lib/core/event_bus.js"
 import { makeCoreViewerClass, makeContainer } from "../helpers/viewer_fixture.js"
 import { highlight, underline, note, ink, freeHighlight, legacyUnderline } from "../helpers/factories.js"
@@ -573,6 +573,292 @@ describe("PdfViewer", () => {
       viewer.destroy()
 
       expect(() => container.querySelector(".pdf-pages-container").click()).not.toThrow()
+    })
+  })
+
+
+  describe("loading", () => {
+    function deferred() {
+      let resolve, reject
+      const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+      return { promise, resolve, reject }
+    }
+
+    it("keeps the document readable when its annotations fail to load", async () => {
+      const { viewer, container, store } = await makeViewer()
+      viewer.thumbnailSidebar = null // The stand-in document has no pages to draw
+      store.load = vi.fn(async () => { throw new Error("HTTP 500") })
+      const onError = vi.fn()
+      container.addEventListener("pdf-viewer:user-error", onError)
+
+      await expect(viewer.load()).resolves.toBeUndefined()
+
+      expect(onError).toHaveBeenCalledOnce()
+      expect(onError.mock.calls[0][0].detail.message).toBe("Failed to load annotations")
+      expect(viewer.currentTool).toBe(viewer.tools[ToolMode.SELECT])
+      viewer.destroy()
+    })
+
+    it("still fails when the document itself can't be loaded", async () => {
+      const { viewer } = await makeViewer()
+      viewer.viewer.load = vi.fn(async () => { throw new Error("Missing PDF") })
+
+      await expect(viewer.load()).rejects.toThrow("Missing PDF")
+    })
+
+    it("stops quietly when destroyed while the document is loading", async () => {
+      // destroy() aborts the PDF.js load, which rejects. That is a teardown,
+      // not a failure for the host to report.
+      const { viewer } = await makeViewer()
+      const loading = deferred()
+      viewer.viewer.load = vi.fn(() => loading.promise)
+      const result = viewer.load()
+
+      viewer.destroy()
+      loading.reject(new Error("Loading aborted"))
+
+      await expect(result).resolves.toBeUndefined()
+    })
+
+    it("does not start tools or tracking when destroyed while annotations load", async () => {
+      // Regression: load() carried on after destroy() and started a 30s
+      // heartbeat that nothing would ever clear.
+      vi.useFakeTimers()
+      const fetchMock = vi.fn(async () => ({}))
+      vi.stubGlobal("fetch", fetchMock)
+      try {
+        const { viewer, store } = await makeViewer({ options: { trackingUrl: "/track" } })
+        viewer.thumbnailSidebar = null
+        const loading = deferred()
+        store.load = vi.fn(() => loading.promise)
+        const result = viewer.load()
+        await vi.advanceTimersByTimeAsync(0)
+
+        viewer.destroy()
+        loading.resolve([])
+        await result
+        await vi.advanceTimersByTimeAsync(120000)
+
+        expect(viewer.currentTool).toBeNull()
+        expect(fetchMock).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+        vi.unstubAllGlobals()
+      }
+    })
+  })
+
+  describe("time tracking", () => {
+    let fetchMock
+
+    function setHidden(hidden) {
+      Object.defineProperty(document, "hidden", { value: hidden, configurable: true })
+      document.dispatchEvent(new Event("visibilitychange"))
+    }
+
+    const reported = () => fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).time_spent)
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      fetchMock = vi.fn(async () => ({}))
+      vi.stubGlobal("fetch", fetchMock)
+    })
+
+    afterEach(() => {
+      Object.defineProperty(document, "hidden", { value: false, configurable: true })
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    })
+
+    async function tracked() {
+      const { viewer } = await makeViewer({ options: { trackingUrl: "/track" } })
+      viewer.thumbnailSidebar = null // The stand-in document has no pages to draw
+      await viewer.load()
+      return viewer
+    }
+
+    it("reports time every 30 seconds while the document is visible", async () => {
+      const viewer = await tracked()
+
+      await vi.advanceTimersByTimeAsync(60000)
+
+      expect(reported()).toEqual([30, 30])
+      viewer.destroy()
+    })
+
+    it("does not count time while the tab is hidden", async () => {
+      // Regression: the heartbeat kept running in the background and reported
+      // the hidden time as time spent reading.
+      const viewer = await tracked()
+      await vi.advanceTimersByTimeAsync(10000)
+
+      setHidden(true)
+      await vi.advanceTimersByTimeAsync(300000)
+
+      expect(reported()).toEqual([10])
+      viewer.destroy()
+    })
+
+    it("picks the clock back up when the tab is shown again", async () => {
+      const viewer = await tracked()
+      setHidden(true)
+      await vi.advanceTimersByTimeAsync(300000)
+
+      setHidden(false)
+      await vi.advanceTimersByTimeAsync(30000)
+
+      expect(reported()).toEqual([0, 30])
+      viewer.destroy()
+    })
+
+    it("reports the remainder on destroy and then stops", async () => {
+      const viewer = await tracked()
+      await vi.advanceTimersByTimeAsync(12000)
+
+      viewer.destroy()
+      await vi.advanceTimersByTimeAsync(120000)
+
+      expect(reported()).toEqual([12])
+    })
+
+    it("reports nothing more on destroy while hidden", async () => {
+      const viewer = await tracked()
+      setHidden(true)
+      await vi.advanceTimersByTimeAsync(50000)
+
+      viewer.destroy()
+
+      expect(reported()).toEqual([0])
+    })
+
+    it("sends updates that can outlive the page, without a blank CSRF header", async () => {
+      const viewer = await tracked()
+
+      viewer.destroy()
+
+      const [, init] = fetchMock.mock.calls[0]
+      expect(init.keepalive).toBe(true)
+      expect(init.headers).not.toHaveProperty("X-CSRF-Token")
+    })
+  })
+
+  describe("undo", () => {
+    const pressUndo = (target = document.body, init = {}) => {
+      const event = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true, ...init })
+      target.dispatchEvent(event)
+      return event
+    }
+
+    async function withDeletedNote() {
+      const made = await makeViewer({ annotations: [note({ page: 1 })] })
+      const [stored] = await made.store.load()
+      await made.viewer.annotationManager.deleteAnnotation(stored.id)
+      return { ...made, stored }
+    }
+
+    it("restores the deleted annotation on Ctrl+Z, as the announcement promises", async () => {
+      const { viewer, stored } = await withDeletedNote()
+
+      const event = pressUndo()
+
+      await vi.waitFor(() => expect(viewer.annotationManager.getAnnotation(stored.id)).toBeTruthy())
+      expect(event.defaultPrevented).toBe(true)
+      expect(viewer.undoBar.currentAnnotation).toBeNull()
+      viewer.destroy()
+    })
+
+    it("restores on Cmd+Z too", async () => {
+      const { viewer, stored } = await withDeletedNote()
+
+      pressUndo(document.body, { ctrlKey: false, metaKey: true })
+
+      await vi.waitFor(() => expect(viewer.annotationManager.getAnnotation(stored.id)).toBeTruthy())
+      viewer.destroy()
+    })
+
+    it("leaves Ctrl+Z alone while typing", async () => {
+      const { viewer, stored } = await withDeletedNote()
+      const textarea = document.createElement("textarea")
+      document.body.appendChild(textarea)
+
+      const event = pressUndo(textarea)
+
+      expect(event.defaultPrevented).toBe(false)
+      expect(viewer.undoBar.currentAnnotation).toBeTruthy()
+      expect(viewer.annotationManager.getAnnotation(stored.id)).toBeUndefined()
+      viewer.destroy()
+    })
+
+    it("leaves Ctrl+Z alone when there is nothing to undo", async () => {
+      const { viewer } = await makeViewer()
+
+      expect(pressUndo().defaultPrevented).toBe(false)
+      viewer.destroy()
+    })
+
+    it("stops listening once destroyed", async () => {
+      const { viewer } = await withDeletedNote()
+      const onUndo = vi.spyOn(viewer.undoBar, "undo")
+
+      viewer.destroy()
+      pressUndo()
+
+      expect(onUndo).not.toHaveBeenCalled()
+    })
+
+    it("does not announce a restore the store couldn't perform", async () => {
+      const { viewer, store, stored } = await withDeletedNote()
+      store.restore = vi.fn(async () => null)
+      const render = vi.spyOn(viewer, "_renderAnnotationsForPage")
+
+      await viewer._onAnnotationUndo(stored)
+
+      expect(render).not.toHaveBeenCalled()
+      viewer.destroy()
+    })
+
+    it("does not reject when a delete or an undo fails", async () => {
+      // Both are fired from click handlers; the manager reports the failure.
+      const { viewer, store } = await makeViewer({ annotations: [note({ page: 1 })] })
+      const [stored] = await store.load()
+      store.delete = vi.fn(async () => { throw new Error("offline") })
+      store.restore = vi.fn(async () => { throw new Error("offline") })
+      const onError = vi.fn()
+      viewer.container.addEventListener("pdf-viewer:user-error", onError)
+
+      await expect(viewer._onAnnotationDelete(stored)).resolves.toBeUndefined()
+      await expect(viewer._onAnnotationUndo(stored)).resolves.toBeUndefined()
+
+      expect(onError).toHaveBeenCalledTimes(2)
+      viewer.destroy()
+    })
+  })
+
+  describe("changing an annotation's colour", () => {
+    async function recolour(record) {
+      const { viewer, store } = await makeViewer({ annotations: [record] })
+      const [stored] = await store.load()
+      await viewer._onAnnotationColorChange(viewer.annotationManager.getAnnotation(stored.id), "#00FF00")
+      const { color } = viewer.annotationManager.getAnnotation(stored.id)
+      viewer.destroy()
+      return color
+    }
+
+    it("keeps a pen drawing opaque when the store returns no opacity", async () => {
+      // Regression: every ink record defaulted to the highlighter's 40%.
+      expect(await recolour(ink({ page: 1, color: "#0000FF", opacity: undefined }))).toBe("#00FF00ff")
+    })
+
+    it("keeps a freehand highlight translucent", async () => {
+      expect(await recolour(freeHighlight({ page: 1, color: "#FFA500", opacity: undefined }))).toBe("#00FF0066")
+    })
+
+    it("keeps the alpha already in the colour when there is no opacity field", async () => {
+      expect(await recolour(freeHighlight({ page: 1, color: "#FFA50033", opacity: undefined }))).toBe("#00FF0033")
+    })
+
+    it("prefers the stored opacity", async () => {
+      expect(await recolour(highlight({ page: 1, color: "#FFA500CC", opacity: 0.4 }))).toBe("#00FF0066")
     })
   })
 })
